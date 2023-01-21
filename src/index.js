@@ -29,7 +29,7 @@ app.use(bodyParser.json());
 app.use(cors());
 
 app.get("/", (req, res) => {
-  res.send("No Endpoint Found");
+  res.send("Welcome to Ecoroute Server....");
 });
 
 app.get("/getallstations", function (req, res) {
@@ -133,6 +133,34 @@ function searchForStations(coordinates) {
   return "OK";
 }
 
-app.listen(6001, () => {
-  console.log("listening on port 6001");
+let rawdata = fs.readFileSync("../assets/EV_STATION_DATA.json");
+let chargingStationsData = JSON.parse(rawdata);
+// console.log(chargingStationsData);
+chargingStationsData = Object.values(chargingStationsData);
+
+// use one or more query parameters (city, postalCode)
+// the endpoint returns the union of these parameters
+app.get("/chargingStations", (req, res) => {
+  const city = req.query.city;
+	const postalCode = req.query.postalCode; 
+
+	let reqChargingStations = chargingStationsData;
+	if(city) {
+		city = city.toLowerCase();
+		reqChargingStations = reqChargingStations.filter(
+			(c) => c.address.municipality.toLowerCase() === city || c.address.countrySecondarySubdivision.toLowerCase() === city || c.address.countrySubdivision.toLowerCase() === city
+		);
+	}
+	if(postalCode) {
+		reqChargingStations = reqChargingStations.filter(
+			(c) => c.address.postalCode === postalCode
+		);
+	}
+  res.send(reqChargingStations);
+});
+
+const port = process.env.PORT || 6001;
+
+app.listen(port, () => {
+  console.log(`listening on port ${port}`);
 });
