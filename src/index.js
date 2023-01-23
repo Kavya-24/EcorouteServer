@@ -6,19 +6,7 @@ const morgan = require("morgan");
 const fs = require("fs");
 const fetch = require("./fetchtimeout");
 const turf = require("@turf/turf");
-
-/**
- * MAPBOX TOKENS
- */
-
-//Mapbox Constants
-var MAPBOX_DOMAIN = "https://api.mapbox.com/";
-var ACCESS_TOKEN =
-  "&access_token=pk.eyJ1Ijoia2F2eWEtMjQiLCJhIjoiY2w2Y2xhc2JpMW80MjNrcDNuZ3hwdDVxNSJ9.yRixm6cK2FVMVYiBk8AbDw";
-
-var ISOCHRONE_QUERY_TYPE = "isochrone/v1/mapbox/driving/";
-var CONTOUR_QUERY = "?contours_minutes=60";
-var ISOCHRONE_OPTION = "&contours_colors=6706ce&polygons=true";
+const Util = require("./utils");
 
 const app = express();
 
@@ -42,104 +30,15 @@ app.get("/getallstations", function (req, res) {
   );
 });
 
-app.get("/getcurrentisochrone", function (req, res) {
-  const lat = req.query.lat;
-  const lon = req.query.lon;
-
-  let URL =
-    MAPBOX_DOMAIN +
-    ISOCHRONE_QUERY_TYPE +
-    lon +
-    "," +
-    lat +
-    CONTOUR_QUERY +
-    ISOCHRONE_OPTION +
-    ACCESS_TOKEN;
-  console.log(URL);
-
-  fetch(URL, { method: "GET" }, 15000) // throw after max 5 seconds timeout error
-    .then((response) => response.json())
-    .then((response) => {
-      console.log(JSON.stringify(response));
-      res.send(JSON.stringify(response));
-    })
-    .catch((e) => {
-      console.log("error");
-      console.log(e);
-      res.send("error");
-    });
-});
-
-app.get("/getnearbystations", function (req, res) {
-  const lat = req.query.lat;
-  const lon = req.query.lon;
-
-  let URL =
-    MAPBOX_DOMAIN +
-    ISOCHRONE_QUERY_TYPE +
-    lon +
-    "," +
-    lat +
-    CONTOUR_QUERY +
-    ISOCHRONE_OPTION +
-    ACCESS_TOKEN;
-  console.log(URL);
-
-  fetch(URL, { method: "GET" }, 15000) // throw after max 5 seconds timeout error
-    .then((response) => response.json())
-    .then((response) => {
-      // console.log(response.features[0].geometry.coordinates[0].length)
-      res.send(searchForStations(response.features[0].geometry.coordinates[0]));
-    })
-    .catch((e) => {
-      console.log("error");
-      console.log(e);
-      res.send("Timeout Error");
-    });
-});
-
-function searchForStations(coordinates) {
-  fs.readFile(
-    __dirname + "./../assets/" + "EV_STATION_DATA.json",
-    "utf8",
-    function (err, data) {
-      const evStationsObject = JSON.parse(data);
-      var evPoints = [];
-
-      for (var key in evStationsObject) {
-        if (evStationsObject.hasOwnProperty(key)) {
-          // console.log([evStationsObject[key].position.lon,evStationsObject[key].position.lat]);
-          evPoints.push([
-            evStationsObject[key].position.lon,
-            evStationsObject[key].position.lat,
-          ]);
-        }
-      }
-
-      var polygonCoordinates = [];
-      for (let i = 0; i < coordinates.length; i++) {
-        polygonCoordinates.push([coordinates[i][0], coordinates[i][1]]);
-      }
-
-      var points = turf.points(evPoints);
-
-      var searchWithin = turf.polygon([polygonCoordinates]);
-
-      var ptsWithin = turf.pointsWithinPolygon(points, searchWithin);
-      console.log(ptsWithin);
-    }
-  );
-
-  return "OK";
-}
-
 let rawdata = fs.readFileSync("../assets/EV_STATION_DATA.json");
 let chargingStationsData = JSON.parse(rawdata);
-// console.log(chargingStationsData);
 chargingStationsData = Object.values(chargingStationsData);
 
-// use one or more query parameters (city, postalCode)
-// the endpoint returns the union of these parameters
+/**
+ * use one or more query parameters (city, postalCode)
+ * the endpoint returns the union of these parameters 
+ * Sample Query: http://localhost:6001/chargingstations?postalCode=122003 
+ */
 app.get("/chargingStations", (req, res) => {
   const city = req.query.city;
 	const postalCode = req.query.postalCode; 
@@ -158,6 +57,160 @@ app.get("/chargingStations", (req, res) => {
 	}
   res.send(reqChargingStations);
 });
+
+
+/**
+ * API for getting the stations within a distance d from a point (LatLng)
+ * Sample Query: http://localhost:6001/stationsInVicinity?lat=25.5376569&lon=84.8481432&radius=300000
+ * By default, the radius is 50km. The value to be given is in meter(s)
+ */
+app.get("/stationsInVicinity", (req, res) => {
+  
+  const lat = req.query.lat;
+  const lon = req.query.lon;
+  var radius = req.query.radius;
+
+  if(lat === undefined){
+    res.send("Add Point Latitude")
+  }
+
+  if(lon === undefined){
+    res.send("Add Point Longitude")
+  }
+  
+  if(radius === undefined){
+    radius = 50000
+  }
+
+  console.log(`Request parameters: Lat=${lat}, Lon=${lon}, Radius=${radius}`);
+  var from = turf.point([lon, lat]);
+  var options = {units: 'meters'};
+
+  let reqChargingStations = [];
+  for(let i=0; i < chargingStationsData.length; i++){
+      var c = chargingStationsData[i];
+      var to = turf.point([c.position.lon, c.position.lat]);
+      var distance = turf.distance(from, to, options);
+      if(distance <= radius){
+        reqChargingStations.push(c)
+      } 
+  }
+  console.log(reqChargingStations)
+  res.send(reqChargingStations);
+  
+});
+
+
+/**
+ * Wrapper API for getting the desired results for User
+ * Inputs:Lat1, Lon1, Lat2,Lon2, SOC
+ * Sample Query: http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=28.5673&lon2=77.3211&soc=10
+ * By default, SOC = full-charge = 100%
+ */
+app.get("/ecoroutePath", (req, res) => {
+  
+  const srcLatitude = req.query.lat1;
+  const srcLongitude = req.query.lon1;
+  const dstLatitude = req.query.lat2;
+  const dstLongitude = req.query.lon2;
+  var soc= req.query.soc;
+  
+  if(srcLatitude === undefined){
+    res.send("Add Source Latitude")
+  }
+  
+  if(srcLongitude === undefined){
+    res.send("Add Source Longitude")
+  }
+  
+  if(dstLatitude === undefined){
+    res.send("Add Destination Latitude")
+  }
+  
+  if(dstLongitude === undefined){
+    res.send("Add Destination Longitude")
+  }
+
+  
+  if(soc === undefined){
+    soc = 100
+  }
+
+
+  console.log(`\n\nRequest parameters: Source: Lat=${srcLatitude}, Lon=${srcLongitude}, Destination: Lat=${dstLatitude}, Lon=${dstLongitude}, SOC=${soc} `);
+  
+  var stops = new Set() //Stations that are part of the path
+  var path = []
+
+  ecorouteIsochone(srcLatitude,srcLongitude,dstLatitude,dstLongitude,soc, res,1, stops, path)
+
+});
+
+async function ecorouteIsochone(srcLatitude, srcLongitude, dstLatitude, dstLongitude, soc, res, steps, stops, path){
+  
+  
+  path.push([srcLongitude, srcLatitude])
+  var URL = Util.getIsochroneURL(srcLatitude, srcLongitude, soc)
+  console.log(`\nFinding the isochrone for ${URL}`)
+  
+  fetch(URL, { method: "GET" }, 15000) 
+    .then((response) => response.json())
+    .then((response) => {
+      
+      var foundInDestination = Util.destinationPresentInBoundingBox(dstLatitude, dstLongitude, response, chargingStationsData);
+
+      console.log(`Isochrone found. Finding point: ${dstLongitude}, ${dstLatitude} in the boundingPolygon. ${foundInDestination}`)
+      if(foundInDestination === true){
+
+        path.push([dstLongitude, dstLatitude]);        
+        console.log(`Destination found in the current isochrone. Number of steps = ${steps}. Path size= ${path.length}`);
+        
+        return findDirectionRoute(path, res, steps)
+      }
+      else if(foundInDestination === false){
+
+        var nextChargingStation = Util.findAdmissibleChargingStation(srcLatitude, srcLongitude, response, chargingStationsData, dstLatitude, dstLongitude, stops)
+        if(nextChargingStation == null || nextChargingStation === undefined){
+          console.log("Unable to find appropriate charging stations")
+        }
+        else{
+          
+          stops.add(nextChargingStation)
+          return ecorouteIsochone(nextChargingStation.position.lat, nextChargingStation.position.lon, dstLatitude, dstLongitude, 100, res, steps+1, stops, path)
+        }
+      }
+      else{
+        console.log("Unable to compute destination in isochrone")
+      }
+      
+      console.log("Iteration of isochrone = " + steps)
+      res.send("Successfully recovered");
+
+    })
+    .catch((e) => {
+      res.send(`Unable to find isochrone for ${srcLongitude}, ${srcLatitude}`)
+    });
+}
+
+async function findDirectionRoute(path, res, steps){
+  
+  
+  //The path has the lon,lat of all the favourable things
+  var URL = Util.getDirectionsURL(path)
+  console.log(`\nFinding the navigation route for ${URL}`)
+  
+  fetch(URL, { method: "GET" }, 15000) 
+    .then((response) => response.json())
+    .then((response) => {
+      
+      res.send(response)
+
+    })
+    .catch((e) => {
+      res.send(`Unable to find navigational route`)
+    });
+    
+}
 
 const port = process.env.PORT || 6001;
 
