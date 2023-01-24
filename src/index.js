@@ -45,9 +45,9 @@ app.get("/chargingStations", (req, res) => {
     let city = req.query.city;
     let postalCode = req.query.postalCode;
     let name = req.query.name;
-    let maxEntries = 50;
+    let maxEntries = 10;
 
-    if (maxEntries) {
+    if (req.query.maxEntries) {
       maxEntries = req.query.maxEntries;
     }
 
@@ -78,19 +78,39 @@ app.get("/chargingStations", (req, res) => {
     console.log(options);
 
     const fuse = new Fuse(reqChargingStations, options);
-
-    let result = fuse.search(name);
-
-    let r = [];
-    if (maxEntries) {
-      let mx = parseInt(maxEntries);
-      for (var i of result) {
-        r.push(i);
-        mx--;
-        if (mx === 0) break;
+    
+    var result = new Set();
+    if(city){
+      let r1 = fuse.search(city);
+      for(var i of r1){
+        result.add(i);
       }
     }
 
+    if(name){
+      let r1 = fuse.search(name);
+      for(var i of r1){
+        result.add(i);
+      }
+    }
+    
+    if(postalCode){
+      let r1 = fuse.search(postalCode);
+      for(var i of r1){
+        result.add(i);
+      }
+    }
+    
+    console.log(result.size)
+
+    let r = [];
+    let mx = parseInt(maxEntries);
+    for (var i of result) {
+      r.push(i);
+      mx--;
+      if (mx === 0) break;
+    } 
+    console.log("Result size = " + r.length)
     res.send(r);
   } catch (e) {
     res.send(e);
