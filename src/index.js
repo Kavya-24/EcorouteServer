@@ -6,6 +6,7 @@ const morgan = require("morgan");
 const fs = require("fs");
 const fetch = require("./fetchtimeout");
 const turf = require("@turf/turf");
+const Fuse = require("fuse.js");
 
 /**
  * MAPBOX TOKENS
@@ -138,25 +139,55 @@ let chargingStationsData = JSON.parse(rawdata);
 // console.log(chargingStationsData);
 chargingStationsData = Object.values(chargingStationsData);
 
-// use one or more query parameters (city, postalCode)
-// the endpoint returns the union of these parameters
+// use one or more query parameters (city, postalCode, text, maxEntries)
+// the endpoint returns the intersection of these parameters
 app.get("/chargingStations", (req, res) => {
-  const city = req.query.city;
-	const postalCode = req.query.postalCode; 
+  let city = req.query.city;
+  let postalCode = req.query.postalCode;
+  let name = req.query.name;
+  let maxEntries = req.query.maxEntries;
 
-	let reqChargingStations = chargingStationsData;
-	if(city) {
-		city = city.toLowerCase();
-		reqChargingStations = reqChargingStations.filter(
-			(c) => c.address.municipality.toLowerCase() === city || c.address.countrySecondarySubdivision.toLowerCase() === city || c.address.countrySubdivision.toLowerCase() === city
-		);
-	}
-	if(postalCode) {
-		reqChargingStations = reqChargingStations.filter(
-			(c) => c.address.postalCode === postalCode
-		);
-	}
-  res.send(reqChargingStations);
+  let reqChargingStations = chargingStationsData;
+
+  let options = {
+    includeScore: true,
+    keys: [],
+  };
+
+  if (city) {
+    options.keys.push(
+      "address.municipality",
+      "address.countrySecondarySubdivision",
+      "address.countrySubdivision",
+      "address.municipalitySubdivision"
+    );
+  }
+
+  if (postalCode) {
+    options.keys.push("address.postalCode");
+  }
+
+  if (name) {
+    options.keys.push("poi.name", "address.freeformAddress");
+  }
+
+  console.log(options);
+
+  const fuse = new Fuse(reqChargingStations, options);
+
+  let result = fuse.search(name);
+
+  let r = [];
+  if (maxEntries) {
+    let mx = parseInt(maxEntries);
+    for (var i of result) {
+      r.push(i);
+      mx--;
+      if (mx === 0) break;
+    }
+  }
+
+  res.send(r);
 });
 
 const port = process.env.PORT || 6001;
