@@ -31,7 +31,7 @@ app.get("/getallstations", function (req, res) {
   );
 });
 
-let rawdata = fs.readFileSync("./EV_STATION_DATA.json");
+let rawdata = fs.readFileSync(__dirname+"/EV_STATION_DATA.json");
 let chargingStationsData = JSON.parse(rawdata);
 chargingStationsData = Object.values(chargingStationsData);
 
