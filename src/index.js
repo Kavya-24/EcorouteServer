@@ -23,7 +23,7 @@ app.get("/", (req, res) => {
 
 app.get("/getallstations", function (req, res) {
   fs.readFile(
-    __dirname + "./../assets/" + "EV_STATION_DATA.json",
+    __dirname + "/EV_STATION_DATA.json",
     "utf8",
     function (err, data) {
       res.end(data);
@@ -31,7 +31,7 @@ app.get("/getallstations", function (req, res) {
   );
 });
 
-let rawdata = fs.readFileSync("../assets/EV_STATION_DATA.json");
+let rawdata = fs.readFileSync("./EV_STATION_DATA.json");
 let chargingStationsData = JSON.parse(rawdata);
 chargingStationsData = Object.values(chargingStationsData);
 
