@@ -167,6 +167,7 @@ app.get("/ecoroutePath", (req, res) => {
   const srcLongitude = req.query.lon1;
   const dstLatitude = req.query.lat2;
   const dstLongitude = req.query.lon2;
+  var measure = req.query.measure
   var soc = req.query.soc;
 
   if (srcLatitude === undefined) {
@@ -189,14 +190,27 @@ app.get("/ecoroutePath", (req, res) => {
     soc = 100;
   }
 
+  if(measure === undefined){
+    measure = "energy"
+  }
+
   console.log(
-    `\n\nRequest parameters: Source: Lat=${srcLatitude}, Lon=${srcLongitude}, Destination: Lat=${dstLatitude}, Lon=${dstLongitude}, SOC=${soc} `
+    `\n\nRequest parameters: Source: Lat=${srcLatitude}, Lon=${srcLongitude}, Destination: Lat=${dstLatitude}, Lon=${dstLongitude}, SOC=${soc} and measure=${measure} `
   );
 
-  var stops = new Set(); //Stations that are part of the path
-  var path = [];
 
-  ecorouteIsochone(
+  var path = [];
+  
+  if(measure === "petrol"){
+    path.push([srcLongitude, srcLatitude]);
+    path.push([dstLongitude, dstLatitude]);
+    return findDirectionRoute(path, res, 1);
+  }
+
+  var stops = new Set(); //Stations that are part of the path
+
+  
+  return ecorouteIsochone(
     srcLatitude,
     srcLongitude,
     dstLatitude,

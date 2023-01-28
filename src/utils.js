@@ -1,4 +1,11 @@
 const turf = require("@turf/turf");
+const fetch = require("./fetchtimeout");
+const {
+  PriorityQueue,
+  MinPriorityQueue,
+  MaxPriorityQueue,
+} = require('@datastructures-js/priority-queue');
+
 class Util {
 
     static MAPBOX_DOMAIN = "https://api.mapbox.com/";
@@ -73,49 +80,138 @@ class Util {
     }
 
     //private
-    static findStationsInIsochrone(chargingStationsData, boundingPolygon){
+    static astar_cost(_srcPoint, _dstPoint, _stationPoint){
+            var gn = turf.distance(_srcPoint, _stationPoint, this.distanceOptions);
+            var hn =   turf.distance(_dstPoint, _stationPoint, this.distanceOptions);
+            return gn * (1/(1+gn)) + hn;
+    }
+
+    //private
+    static findStationsInIsochrone(chargingStationsData, boundingPolygon, stops, srcPoint, dstPoint){
         
-        let evStations = []
-        for(var i=0; i < chargingStationsData.length; i++){
+        var stationsInQueue = new MinPriorityQueue((a, b) => {
+            
+            if(b === undefined){
+                return 1;
+            }
+            if(a === undefined){
+                return 1;
+            }
+            if(a._fn <= b._fn){
+                return -1;
+            }
+            return 1;
+        });
+
+        for(var i=0; i<chargingStationsData.length; i++){
             var c = chargingStationsData[i];
-        
+            
+            
             if(turf.booleanPointInPolygon(turf.point([c.position.lon, c.position.lat]), boundingPolygon)){
                 
-                evStations.push(c);
+                var fn = this.astar_cost(srcPoint, dstPoint, turf.point([c.position.lon, c.position.lat]));  
+                
+                if(stops.has(c) === false){
+                    stationsInQueue.push({_fn : fn, _station : c});
+                
+                }            
             }
+
         }
 
-        return evStations
+
+        return stationsInQueue
 
     }
 
     //private
-    static astar_cost(_srcPoint, _dstPoint, _stationPoint){
-            return turf.distance(_srcPoint, _stationPoint, this.distanceOptions) +  turf.distance(_dstPoint, _stationPoint, this.distanceOptions);
+    static flattenObject(ob) {
+        var toReturn = {};
+
+        for (var i in ob) {
+            if (!ob.hasOwnProperty(i)) continue;
+
+            if ((typeof ob[i]) == 'object' && ob[i] !== null) {
+                var flatObject = flattenObject(ob[i]);
+                for (var x in flatObject) {
+                    if (!flatObject.hasOwnProperty(x)) continue;
+                    toReturn[i + '.' + x] = flatObject[x];
+                }
+            } else {
+                toReturn[i] = ob[i];
+            }
+        }
+        return toReturn;
     }
+
+    //private
+    static modelIntermediatePath(response){
+
+        console.log(response.routes[0].legs)
+        
+    }
+
+    //private
+    static async findIntermediatePath(path){
+        var URL = Util.getDirectionsURL(path);
+        console.log(`\nFinding the navigation route for ${URL}`);
+
+        fetch(URL, { method: "GET" }, 15000)
+            .then((response) => response.json())
+            .then((response) => {
+                console.log(`Path ${path} found`);
+                this.modelIntermediatePath(response)     
+
+            })
+            .catch((e) => {
+                console.log(`Unable to find navigational route for path ${path}`);
+            });
+    }
+
+    //private
+    static async analyzeStationPath(_lat, _lon, stationsInQueue, T){
+
+        //We need to find the direct directional path from _src to _station coordinates
+        //Then we need to analyze the number of turns, the distance and the time taken
+        //We will also calculate the effective height change on each leg of the path
+
+        console.log("Station = " + stationsInQueue.size() + " and T=" + T)
+        
+        if(T == 0 || stationsInQueue.size() == 0){
+            return;
+        }
+        
+        var _evStation = stationsInQueue.dequeue()._station;
+        var path = []
+        path.push([_lon, _lat]);
+        path.push([_evStation.position.lon, _evStation.position.lat]);
+        this.findIntermediatePath(path)
+        
+
+        this.analyzeStationPath(_lat,_lon, stationsInQueue, T-1)
+
+    }
+
 
     //public
     static findAdmissibleChargingStation(_lat, _lon, isochroneResponse, chargingStationsData, _dstLat, _dstLon, stops){
+        
         
         var srcPoint = turf.point([_lon, _lat])
         var dstPoint = turf.point([_dstLon, _dstLat])
 
         var boundingPolygon = this.getBoundingPolygon(isochroneResponse.features[0].geometry.coordinates[0]);
         
-        //We have to find all the evstations in the bounding polygon
-        var admissibleStations = this.findStationsInIsochrone(chargingStationsData, boundingPolygon);
+        //We have to find all the evstations in the bounding polygon and ordered by priority
+        var stationsInQueue = this.findStationsInIsochrone(chargingStationsData, boundingPolygon, stops, srcPoint, dstPoint);
+        var station = null;
         
-        //Now out of all these admissibleStations, we need to find the station which optimally fits the A* approach, and is already not used/visited. 
-        var fn = Number.MAX_VALUE
-        var station = null
+        console.log("BP4. Size = " + stationsInQueue.size());
 
-        for(var i=0; i<admissibleStations.length; i++){
-            //Finding the distance from
-            var c = admissibleStations[i];
-            if(this.astar_cost(srcPoint, dstPoint, turf.point([c.position.lon, c.position.lat])) < fn && stops.has(c) === false){
-                station = c;
-            }
-        }
+        
+        //Choose the three most optimal stations and find their heuristics and measures
+        this.analyzeStationPath(_lat, _lon, stationsInQueue, 3)
+        
 
         return station
     }
