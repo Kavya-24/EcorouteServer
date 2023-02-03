@@ -166,6 +166,8 @@ class Util {
       .getDirections({
         profile: "driving-traffic",
         waypoints: pathWaypoints,
+        steps : true,
+        bannerInstructions: true
       })
       .send()
       .then((response) => {

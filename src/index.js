@@ -307,8 +307,10 @@ async function findDirectionRoute(path, res, steps) {
   var pathWaypoints = Util.findPathWaypoints(path)
   directionService
     .getDirections({
-      profile: "driving-traffic",
-      waypoints: pathWaypoints,
+        profile: "driving-traffic",
+        waypoints: pathWaypoints,
+        steps : true,
+        bannerInstructions: true
     })
     .send()
     .then((response) => {
