@@ -8,6 +8,14 @@ const fetch = require("./fetchtimeout");
 const turf = require("@turf/turf");
 const Fuse = require("fuse.js");
 const Util = require("./utils");
+const mapboxClient = require("@mapbox/mapbox-sdk");
+const baseClient = mapboxClient({
+  accessToken:
+    "pk.eyJ1Ijoia2F2eWEtMjQiLCJhIjoiY2w2Y2xhc2JpMW80MjNrcDNuZ3hwdDVxNSJ9.yRixm6cK2FVMVYiBk8AbDw",
+});
+const mapboxDirectionService = require("@mapbox/mapbox-sdk/services/directions");
+const { dir } = require("console");
+const directionService = mapboxDirectionService(baseClient);
 
 const app = express();
 
@@ -78,30 +86,30 @@ app.get("/chargingStations", (req, res) => {
     console.log(options);
 
     const fuse = new Fuse(reqChargingStations, options);
-    
+
     var result = new Set();
-    if(city){
+    if (city) {
       let r1 = fuse.search(city);
-      for(var i of r1){
+      for (var i of r1) {
         result.add(i);
       }
     }
 
-    if(name){
+    if (name) {
       let r1 = fuse.search(name);
-      for(var i of r1){
+      for (var i of r1) {
         result.add(i);
       }
     }
-    
-    if(postalCode){
+
+    if (postalCode) {
       let r1 = fuse.search(postalCode);
-      for(var i of r1){
+      for (var i of r1) {
         result.add(i);
       }
     }
-    
-    console.log(result.size)
+
+    console.log(result.size);
 
     let r = [];
     let mx = parseInt(maxEntries);
@@ -109,8 +117,8 @@ app.get("/chargingStations", (req, res) => {
       r.push(i);
       mx--;
       if (mx === 0) break;
-    } 
-    console.log("Result size = " + r.length)
+    }
+    console.log("Result size = " + r.length);
     res.send(r);
   } catch (e) {
     res.send(e);
@@ -167,7 +175,7 @@ app.get("/ecoroutePath", (req, res) => {
   const srcLongitude = req.query.lon1;
   const dstLatitude = req.query.lat2;
   const dstLongitude = req.query.lon2;
-  var measure = req.query.measure
+  var measure = req.query.measure;
   var soc = req.query.soc;
 
   if (srcLatitude === undefined) {
@@ -190,18 +198,17 @@ app.get("/ecoroutePath", (req, res) => {
     soc = 100;
   }
 
-  if(measure === undefined){
-    measure = "energy"
+  if (measure === undefined) {
+    measure = "energy";
   }
 
   console.log(
     `\n\nRequest parameters: Source: Lat=${srcLatitude}, Lon=${srcLongitude}, Destination: Lat=${dstLatitude}, Lon=${dstLongitude}, SOC=${soc} and measure=${measure} `
   );
 
-
   var path = [];
-  
-  if(measure === "petrol"){
+
+  if (measure === "petrol") {
     path.push([srcLongitude, srcLatitude]);
     path.push([dstLongitude, dstLatitude]);
     return findDirectionRoute(path, res, 1);
@@ -209,7 +216,6 @@ app.get("/ecoroutePath", (req, res) => {
 
   var stops = new Set(); //Stations that are part of the path
 
-  
   return ecorouteIsochone(
     srcLatitude,
     srcLongitude,
@@ -298,16 +304,16 @@ async function ecorouteIsochone(
 
 async function findDirectionRoute(path, res, steps) {
   //The path has the lon,lat of all the favourable things
-  var URL = Util.getDirectionsURL(path);
-  console.log(`\nFinding the navigation route for ${URL}`);
-
-  fetch(URL, { method: "GET" }, 15000)
-    .then((response) => response.json())
-    .then((response) => {
-      res.send(response);
+  var pathWaypoints = Util.findPathWaypoints(path)
+  directionService
+    .getDirections({
+      profile: "driving-traffic",
+      waypoints: pathWaypoints,
     })
-    .catch((e) => {
-      res.send(`Unable to find navigational route`);
+    .send()
+    .then((response) => {
+      const directions = response.body;
+      res.send(directions);
     });
 }
 

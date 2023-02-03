@@ -5,11 +5,13 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
-    },
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@datastructures-js/priority-queue": "^6.2.0",
+    "@mapbox/mapbox-sdk": "^0.14.0",
     "@turf/boolean-point-in-polygon": "^6.5.0",
     "@turf/helpers": "^6.5.0",
     "@turf/points-within-polygon": "^6.5.0",
@@ -19,6 +21,7 @@
     "express": "^4.18.2",
     "fuse.js": "^6.6.2",
     "helmet": "^6.0.1",
+    "mapbox-gl": "^2.12.0",
     "morgan": "^1.10.0",
     "node-fetch": "^2.6.1",
     "turf": "^3.0.14"
