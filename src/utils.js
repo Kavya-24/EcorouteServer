@@ -1,5 +1,6 @@
 const turf = require("@turf/turf");
 const time_coefficient = require('./timeobjective')
+const energy_coefficient = require('./energyobjective')
 
 class Util {
   
@@ -33,7 +34,7 @@ class Util {
   static astar_cost(_srcPoint, _dstPoint, _stationPoint) {
     var gn = turf.distance(_srcPoint, _stationPoint, this.distanceOptions);
     var hn = turf.distance(_dstPoint, _stationPoint, this.distanceOptions);
-    return gn * (1 / (1 + gn)) + hn;
+    return gn + hn;
   }
 
   //private
@@ -124,12 +125,13 @@ class Util {
       return time_coefficient.optimize(admissibleStations, srcLatitude, srcLongitude)
     }
     
-    return null
+    return energy_coefficient.optimize(admissibleStations, srcLatitude, srcLongitude)
 
   }
 }
 
 /**
+ * http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=26.9124&lon2=75.7873&soc=10&measure=petrol
  * Query helpers
  * Rajiv Chowk : lat1=28.6304&lon1=77.2177
  * DLF Mall : lat2=28.5673&lon2=77.3211

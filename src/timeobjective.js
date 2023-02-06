@@ -66,7 +66,7 @@ class TimeObjective {
         return matrix
       });
 
-    return err.ERR_MESSAGE_MATRIX_OPTIMIZATION
+    return err.ERR_MESSAGE_TIME_OPTIMIZATION
   }
 
   static optimize(admissibleStations, srcLatitude, srcLongitude){
@@ -75,17 +75,16 @@ class TimeObjective {
     if(admissibleStations.length < 1){
        return err.ERR_MESSAGE_NO_STATIONS
     }
+    return admissibleStations[0]._station
     
-
     var matrix = this.optimizeTimeDistanceMatrix(admissibleStations, srcLatitude, srcLongitude)
     var idx = 0;
 
-    if(matrix === err.ERR_MESSAGE_MATRIX_OPTIMIZATION){
+    if(matrix === err.ERR_MESSAGE_TIME_OPTIMIZATION){
        return admissibleStations[idx]._station
     }
     
-    var minimum_time = this.MAX_TIME_STATION;
-    console.log(matrix)
+
 
     return admissibleStations[idx]._station
 
