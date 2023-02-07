@@ -15,7 +15,7 @@ class interfaces {
   //Helpers
 
   static convertSOC(soc) {
-    return soc * 0.6
+    return parseInt(soc * 0.6,10)
   }
 
   static getQueryLiteralCoordinates(path) {
