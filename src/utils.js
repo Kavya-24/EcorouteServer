@@ -120,8 +120,14 @@ class Util {
       dstPoint
     );
 
+    if(admissibleStations.length < 1){
+      return null
+    }
 
+    return admissibleStations[0]._station
+    
     if(measure === "time"){
+
       return time_coefficient.optimize(admissibleStations, srcLatitude, srcLongitude)
     }
     

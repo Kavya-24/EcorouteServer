@@ -161,7 +161,7 @@ app.get("/stationsInVicinity", (req, res) => {
  * Wrapper API for getting the desired results for User
  * Inputs:Lat1, Lon1, Lat2,Lon2, SOC
  * Sample Query: http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=28.5673&lon2=77.3211&soc=10
- * Delhi-Mumbai Query: http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=19.0760&lon2=72.8777&soc=10&measure=time
+ * //Delhi-Mumbai Query: http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=19.0760&lon2=72.8777&soc=10&measure=time
  * By default, SOC = full-charge = 100%
  */
 app.get("/ecoroutePath", (req, res) => {
@@ -313,7 +313,15 @@ function ecorouteIsochone(
 
 
 function findDirectionRoute(path, res, steps) {
-  res.send(path)
+  
+  var resultantPath = []
+  for(let p = 0; p < path.length; p++){
+    resultantPath.push({
+      "lat" : path[p][1],
+      "lon" : path[p][0]
+    })
+  }
+  res.send(resultantPath)
 }
 
 
