@@ -4,12 +4,14 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const fs = require("fs");
-const fetch = require("./fetchtimeout");
+const fetchtimeout = require("./fetchtimeout");
 const turf = require("@turf/turf");
 const Fuse = require("fuse.js");
 const util = require("./utils");
 const err = require('./errors')
 const interfaces = require("./interfaces");
+const fetch = require('node-fetch');
+const {directionService} = require("./mapboxServices");
 
 const app = express();
 
@@ -240,7 +242,7 @@ function ecorouteIsochone(
     var URL = interfaces.getIsochroneURL(srcLatitude, srcLongitude, soc);
     console.log(`\nFinding the isochrone for ${URL}`);
 
-    fetch(URL, { method: "GET" }, 15000)
+    fetchtimeout(URL, { method: "GET" }, 15000)
       .then((response) => response.json())
       .then((response) => {
         var foundInDestination = util.destinationPresentInBoundingBox(
@@ -323,6 +325,55 @@ function findDirectionRoute(path, res, steps) {
   }
   res.send(resultantPath)
 }
+
+app.get('/getPathV1', async (req, res) => {
+  
+  let srcLong = req.query.srcLong; 
+  let srcLat = req.query.srcLat; 
+  let destLong = req.query.destLong; 
+  let destLat = req.query.destLat; 
+
+  let url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${srcLong},${srcLat};${destLong},${destLat}?geometries=geojson&access_token=pk.eyJ1Ijoia2F2eWEtMjQiLCJhIjoiY2w2Y2xhc2JpMW80MjNrcDNuZ3hwdDVxNSJ9.yRixm6cK2FVMVYiBk8AbDw`;
+
+  const response = await fetch(url, {method: 'GET'});
+  const data = await response.json(); 
+
+  res.send(data);
+
+});
+
+/**
+ * Returns path between source and destination 
+ * takes source and destination coordinates as query parameters 
+ * sample: http://localhost:6001/getPathV2?srcLong=-84.518641&srcLat=39.134270&destLong=-84.512023&destLat=39.102779
+ */
+app.get('/getPathV2', async (req, res) => {
+  
+  let srcLong = Number(req.query.srcLong); 
+  let srcLat = Number(req.query.srcLat); 
+  let destLong = Number(req.query.destLong); 
+  let destLat = Number(req.query.destLat); 
+
+  directionService
+      .getDirections({
+        profile: "driving-traffic",
+        waypoints: [
+          {
+            coordinates: [srcLong, srcLat]
+          },
+          {
+            coordinates: [destLong, destLat]
+          },
+        ],
+        geometries: "geojson"
+      })
+      .send()
+      .then((response) => {
+        const directions = response.body;
+        res.send(directions);
+      });
+});
+
 
 
 const port = process.env.PORT || 6001;
