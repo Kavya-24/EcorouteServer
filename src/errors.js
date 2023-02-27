@@ -8,8 +8,8 @@ class Errors{
 
     
       static is_error(response){
-          if(typeof(response) === String && response.substring(0,4) == "ERR:"){
-              return true
+          if(response.startsWith("ERR:")){ 
+            return true
           }
           return false
       }

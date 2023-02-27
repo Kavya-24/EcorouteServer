@@ -1,4 +1,3 @@
-const util = require("./utils");
 const err = require("./errors");
 
 const mapboxClient = require("@mapbox/mapbox-sdk");
@@ -82,9 +81,9 @@ class EnergyObjective {
     return 0;
   }
 
-  static intermediateRoute(path) {
+  static async intermediateRoute(path) {
     var pathWaypoints = this.findPathWaypoints(path);
-    directionService
+    var directionResponse = await directionService
       .getDirections({
         profile: "driving-traffic",
         waypoints: pathWaypoints,
@@ -92,17 +91,14 @@ class EnergyObjective {
         bannerInstructions: true,
       })
       .send()
-      .then((response) => {
-        const directions = response.body;
-        return this.step_weight(directions) + this.height_weight(directions);
-      });
+    var response = await directionResponse.body
+    return this.step_weight(response) + this.height_weight(response);
   }
 
-  static optimizeTurnsHeight(admissibleStations, srcLatitude, srcLongitude) {
+  static async optimizeTurnsHeight(admissibleStations, srcLatitude, srcLongitude) {
     var T = this.ENERGY_OBJECTIVE_OPTIONS;
-    var path = [],
-      _evStation,
-      idx = 0;
+    var path = []
+    var idx = 0, pathW =  Number.MAX_SAFE_INTEGER
     for (let i = 0; i < admissibleStations.length; i++) {
       if (T === 0) {
         break;
@@ -111,36 +107,38 @@ class EnergyObjective {
       T--;
 
       path = [];
-      _evStation = admissibleStations[i]._station;
+      let _evStation = admissibleStations[i]._station;
 
       path.push([srcLongitude, srcLatitude]);
       path.push([_evStation.position.lon, _evStation.position.lat]);
 
-      this.intermediateRoute(path);
+      var path_weight = await this.intermediateRoute(path);
+      if(path_weight < pathW){
+        idx = i;
+        pathW = path_weight
+      }
     }
-
     return admissibleStations[idx]._station;
   }
 
-  static optimize(admissibleStations, srcLatitude, srcLongitude) {
+  static async optimize(admissibleStations, srcLatitude, srcLongitude) {
     if (admissibleStations.length < 1) {
       return err.ERR_MESSAGE_NO_STATIONS;
     }
     
-    return admissibleStations[0]._station
 
-    var matrix = this.optimizeTurnsHeight(
+    var matrix = await this.optimizeTurnsHeight(
       admissibleStations,
       srcLatitude,
       srcLongitude
     );
-    var idx = 0;
 
-    if (matrix === err.ERR_MESSAGE_ENERGY_OPTIMIZATION) {
-      return admissibleStations[idx]._station;
+    console.log(matrix)
+    if(matrix != null && matrix != undefined){
+      return matrix
     }
 
-    return admissibleStations[idx]._station;
+    return admissibleStations[0]._station;
   }
 }
 

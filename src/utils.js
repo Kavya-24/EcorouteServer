@@ -6,8 +6,6 @@ class Util {
   
   static distanceOptions = { units: "kilometers" };
   
-  static ENERGY_OBJECTIVE_OPTIONS = 3
-
   //private
   static getBoundingPolygon(coordinates) {
     var polygonCoordinates = [];
@@ -83,6 +81,13 @@ class Util {
     }
 
     stationsInQueue = this.prioritizeArray(stationsInQueue);
+    
+    console.log("Stations found: " + stationsInQueue.length)
+    if(stationsInQueue.length === 9){
+      for(let i =0; i <= stationsInQueue.length; i++){
+        console.log(stationsInQueue[i])
+      }
+    }
     return stationsInQueue;
   }
 
@@ -95,7 +100,7 @@ class Util {
     return turf.booleanPointInPolygon(destinationPoint, boundingPolygon);
   }
 
-  static findAdmissibleChargingStation(
+  static async findAdmissibleChargingStation(
     srcLatitude,
     srcLongitude,
     isochroneResponse,
@@ -120,19 +125,22 @@ class Util {
       dstPoint
     );
 
+  
     if(admissibleStations.length < 1){
       return null
     }
 
-    return admissibleStations[0]._station
-    
-    if(measure === "time"){
+    if(measure === "unoptimized"){
+      return admissibleStations[0]._station
+    }
 
-      return time_coefficient.optimize(admissibleStations, srcLatitude, srcLongitude)
+    if(measure === "time"){
+      var _station = await time_coefficient.optimize(admissibleStations, srcLatitude, srcLongitude) 
+      return _station
     }
     
-    return energy_coefficient.optimize(admissibleStations, srcLatitude, srcLongitude)
-
+    var _station = energy_coefficient.optimize(admissibleStations, srcLatitude, srcLongitude)
+    return _station
   }
 }
 

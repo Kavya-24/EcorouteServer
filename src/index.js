@@ -166,7 +166,7 @@ app.get("/stationsInVicinity", (req, res) => {
  * //Delhi-Mumbai Query: http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=19.0760&lon2=72.8777&soc=10&measure=time
  * By default, SOC = full-charge = 100%
  */
-app.get("/ecoroutePath", (req, res) => {
+app.get("/ecoroutePath", async (req, res) => {
   const srcLatitude = req.query.lat1;
   const srcLongitude = req.query.lon1;
   const dstLatitude = req.query.lat2;
@@ -195,7 +195,7 @@ app.get("/ecoroutePath", (req, res) => {
   }
 
   if (measure === undefined) {
-    measure = "energy";
+    measure = "unoptimized";
   }
 
   console.log(
@@ -208,30 +208,36 @@ app.get("/ecoroutePath", (req, res) => {
   if (measure === "petrol") {
     path.push([srcLongitude, srcLatitude]);
     path.push([dstLongitude, dstLatitude]);
-    return findDirectionRoute(path, res, 1);
+    var resultantPath = await findDirectionRoute(path);
+    res.send(resultantPath)
   }
 
-  return ecorouteIsochone(
-    srcLatitude,
-    srcLongitude,
-    dstLatitude,
-    dstLongitude,
-    soc,
-    res,
-    1,
-    stops,
-    path,
-    measure
-  );
+  else{
+  
+      var resultantPath = await ecorouteIsochone(
+      srcLatitude,
+      srcLongitude,
+      dstLatitude,
+      dstLongitude,
+      soc,
+      1,
+      stops,
+      path,
+      measure
+    );
+     
+    res.send(resultantPath)
+    
+  }
+  
 });
 
-function ecorouteIsochone(
+async function ecorouteIsochone(
   srcLatitude,
   srcLongitude,
   dstLatitude,
   dstLongitude,
   soc,
-  res,
   steps,
   stops,
   path,
@@ -239,33 +245,42 @@ function ecorouteIsochone(
 ) {
 
     path.push([srcLongitude, srcLatitude]);
+    
+    if(path.length >= 20){
+      return "ERR: Too long path";
+    }
+    
     var URL = interfaces.getIsochroneURL(srcLatitude, srcLongitude, soc);
-    console.log(`\nFinding the isochrone for ${URL}`);
+    console.log(`\nERR: Finding the isochrone for ${URL}`);
 
-    fetchtimeout(URL, { method: "GET" }, 15000)
-      .then((response) => response.json())
-      .then((response) => {
-        var foundInDestination = util.destinationPresentInBoundingBox(
-          dstLatitude,
-          dstLongitude,
-          response
-        );
+    const isochrone_response = await fetch(URL, {method: 'GET'});
+    if(isochrone_response === null || isochrone_response === undefined || isochrone_response == undefined){
+      return "ERR: Unable to find isochrone"
+    }
+    const isochrone_data = await isochrone_response.json(); 
+    if(isochrone_data === null || isochrone_data === undefined || isochrone_data == undefined || isochrone_data.features == undefined){
+      return "ERR: Unable to find isochrone"
+    }
+    var foundInDestination = util.destinationPresentInBoundingBox(
+      dstLatitude,
+      dstLongitude,
+      isochrone_data
+    );
 
-        console.log(
-          `Isochrone found. Is point: ${dstLongitude}, ${dstLatitude} present in the boundingPolygon? = ${foundInDestination}`
-        );
+    if (foundInDestination === true) {
+      path.push([dstLongitude, dstLatitude]);
+      console.log(
+        `ERR: Destination found in the current isochrone. Number of steps = ${steps}. Path size= ${path.length}`
+      );
+      return findDirectionRoute(path);
+    }
 
-        if (foundInDestination === true) {
-          path.push([dstLongitude, dstLatitude]);
-          console.log(
-            `Destination found in the current isochrone. Number of steps = ${steps}. Path size= ${path.length}`
-          );
-          return findDirectionRoute(path, res, steps);
-        } else if (foundInDestination === false) {
-          var nextChargingStation = util.findAdmissibleChargingStation(
+
+    else if (foundInDestination === false) {
+          var nextChargingStation = await util.findAdmissibleChargingStation(
             srcLatitude,
             srcLongitude,
-            response,
+            isochrone_data,
             chargingStationsData,
             dstLatitude,
             dstLongitude,
@@ -276,45 +291,38 @@ function ecorouteIsochone(
           if (
             nextChargingStation == null ||
             nextChargingStation === null ||
-            nextChargingStation === undefined ||
-            err.is_error(nextChargingStation)
+            nextChargingStation === undefined
           ) {
 
-            res.end(
-              "ERR: Unable to find appropriate charging stations"
-            );
+            return  "ERR: Unable to find appropriate charging stations";
+            
 
           } else {
+           
             stops.add(nextChargingStation);
             
-            return ecorouteIsochone(
+            const isochrone_child_response = await ecorouteIsochone(
               nextChargingStation.position.lat,
               nextChargingStation.position.lon,
               dstLatitude,
               dstLongitude,
               100,
-              res,
               steps + 1,
               stops,
               path,
               measure
             );
+            return isochrone_child_response
           }
         } else {
-          res.end("ERR: Unable to find destination in isochrone");
+          return "ERR: Unable to find destination in isochrone";
         }
-      })
-      .catch((e) => {
-        console.log(`Unable to find isochrone. Error thrown: ${e}`);
-        res.end(
-          `ERR: Unable to find isochrone for ${srcLongitude}, ${srcLatitude}`
-        );
-      });
-
-}
+  
+  
+      }
 
 
-function findDirectionRoute(path, res, steps) {
+async function findDirectionRoute(path) {
   
   var resultantPath = []
   for(let p = 0; p < path.length; p++){
@@ -323,7 +331,7 @@ function findDirectionRoute(path, res, steps) {
       "lon" : path[p][0]
     })
   }
-  res.send(resultantPath)
+  return resultantPath
 }
 
 app.get('/getPathV1', async (req, res) => {

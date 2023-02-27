@@ -39,7 +39,7 @@ class TimeObjective {
     return path;
   }
 
-  static optimizeTimeDistanceMatrix(
+  static async optimizeTimeDistanceMatrix(
     admissibleStations,
     srcLatitude,
     srcLongitude
@@ -47,7 +47,7 @@ class TimeObjective {
 
     var path = this._get_path(admissibleStations, srcLatitude, srcLongitude);
     var pathWaypoints = this.findPathWaypoints(path);
-    matrixService
+    var matrixResponse = await matrixService
       .getMatrix({
         points: pathWaypoints,
         profile: "driving-traffic",
@@ -58,35 +58,36 @@ class TimeObjective {
           'distance',
           'duration'
         ]
-      })
-      .send()
-      .then((response) => {
-        const matrix = response.body;
-        console.log(matrix)
-        return matrix
-      });
+      }).send();
+    var response = await matrixResponse.body 
+    
+    console.log(response);
+    var idx = 0, pathT = Number.MAX_SAFE_INTEGER;
 
-    return err.ERR_MESSAGE_TIME_OPTIMIZATION
+    for(let i = 1; i<response.durations[0].length; i++){
+        if(response.durations[0][i] < pathT){
+          idx = i-1;
+          pathT = response.durations[0][i];
+        }
+    } 
+    return admissibleStations[idx]._station
   }
 
-  static optimize(admissibleStations, srcLatitude, srcLongitude){
+  static async optimize(admissibleStations, srcLatitude, srcLongitude){
 
 
     if(admissibleStations.length < 1){
        return err.ERR_MESSAGE_NO_STATIONS
     }
-    return admissibleStations[0]._station
     
-    var matrix = this.optimizeTimeDistanceMatrix(admissibleStations, srcLatitude, srcLongitude)
-    var idx = 0;
+    var matrix = await this.optimizeTimeDistanceMatrix(admissibleStations, srcLatitude, srcLongitude)
+    console.log(matrix)
 
-    if(matrix === err.ERR_MESSAGE_TIME_OPTIMIZATION){
-       return admissibleStations[idx]._station
+    if(matrix != null && matrix != undefined){
+      return matrix
     }
-    
 
-
-    return admissibleStations[idx]._station
+    return admissibleStations[matrix]._station
 
   }
 }
