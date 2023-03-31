@@ -1,5 +1,3 @@
-const err = require("./errors");
-
 const mapboxClient = require("@mapbox/mapbox-sdk");
 const baseClient = mapboxClient({
   accessToken:
@@ -12,8 +10,8 @@ const mapboxTilequeryService = require("@mapbox/mapbox-sdk/services/directions")
 const tilequeryService = mapboxTilequeryService(baseClient);
 
 class EnergyObjective {
-  static ENERGY_OBJECTIVE_OPTIONS = 3;
-  static SCALE_ALPHA = 5;
+  static ENERGY_OBJECTIVE_OPTIONS = 5;
+  static SCALE_ALPHA = 0.5;
 
   static extract_point_cost(_turn_) {
     switch (_turn_) {
@@ -70,10 +68,9 @@ class EnergyObjective {
     for (let l = 0; l < directions.routes[0].legs.length; l++) {
       for (let s = 0; s < directions.routes[0].legs[l].steps.length; s++) {
         step = directions.routes[0].legs[l].steps[s];
-        _weight_ += step.distance + this.extract_point_cost(step.maneuver.type);
+        _weight_ += step.distance + step.distance * this.extract_point_cost(step.maneuver.type) * this.SCALE_ALPHA;
       }
     }
-
     return _weight_;
   }
 
@@ -118,27 +115,23 @@ class EnergyObjective {
         pathW = path_weight
       }
     }
-    return admissibleStations[idx]._station;
+    return idx;
   }
 
   static async optimize(admissibleStations, srcLatitude, srcLongitude) {
-    if (admissibleStations.length < 1) {
-      return err.ERR_MESSAGE_NO_STATIONS;
+
+    if (admissibleStations.length < 1) {                  /**There are no stations to choose from optimal */
+      return null;
     }
     
 
-    var matrix = await this.optimizeTurnsHeight(
+    var station_index = await this.optimizeTurnsHeight(
       admissibleStations,
       srcLatitude,
       srcLongitude
     );
-
-    console.log(matrix)
-    if(matrix != null && matrix != undefined){
-      return matrix
-    }
-
-    return admissibleStations[0]._station;
+    console.log("\n\n\n\nStation at idx " + station_index + " used")
+    return station_index;
   }
 }
 

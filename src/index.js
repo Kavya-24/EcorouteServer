@@ -124,7 +124,7 @@ app.get("/chargingStations", (req, res) => {
 /**
  * API for getting the stations within a distance d from a point (LatLng)
  * Sample Query: http://localhost:6001/stationsInVicinity?lat=25.5376569&lon=84.8481432&radius=300000
- * By default, the radius is 50km. The value to be given is in meter(s)
+ * By default, the radius is 100km. The value to be given is in meter(s)
  */
 app.get("/stationsInVicinity", (req, res) => {
   const lat = req.query.lat;
@@ -140,7 +140,7 @@ app.get("/stationsInVicinity", (req, res) => {
   }
 
   if (radius === undefined) {
-    radius = 50000;
+    radius = 100000;
   }
 
   console.log(`Request parameters: Lat=${lat}, Lon=${lon}, Radius=${radius}`);
@@ -159,21 +159,26 @@ app.get("/stationsInVicinity", (req, res) => {
   res.send(reqChargingStations);
 });
 
+
 /**
  * Wrapper API for getting the desired results for User
  * Inputs:Lat1, Lon1, Lat2,Lon2, SOC
  * Sample Query: http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=28.5673&lon2=77.3211&soc=10
  * //Delhi-Mumbai Query: http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=19.0760&lon2=72.8777&soc=10&measure=time
  * By default, SOC = full-charge = 100%
+ * http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=28.5673&lon2=77.3211&soc=40&evcar={%22carName%22:%20%22Tesla%20Model%20S%22,%20%22carAge%22:%20365,%20%22carMileage%22:%20400,%20%22carBatterCapacity%22:%20100,%20%22carConnector%22:%20%22Type%202%22,%20%22carChargerType%22:%20%22fast%22}
  */
 app.get("/ecoroutePath", async (req, res) => {
   const srcLatitude = req.query.lat1;
   const srcLongitude = req.query.lon1;
   const dstLatitude = req.query.lat2;
   const dstLongitude = req.query.lon2;
+
+
   var measure = req.query.measure;
   var soc = req.query.soc;
-
+  const evCarJson = req.query.evcar;
+  
   if (srcLatitude === undefined) {
     res.end("ERR: Add Source Latitude");
   }
@@ -198,9 +203,17 @@ app.get("/ecoroutePath", async (req, res) => {
     measure = "unoptimized";
   }
 
+  if(evCarJson === undefined){
+    res.end("ERR: NO EV Car Configuration Found");
+  }
+
+
+  const evCar = JSON.parse(evCarJson);
+
   console.log(
-    `\n\nRequest parameters: Source: Lat=${srcLatitude}, Lon=${srcLongitude}, Destination: Lat=${dstLatitude}, Lon=${dstLongitude}, SOC=${soc} and measure=${measure} `
+    `\n\nRequest parameters: Source: Lat=${srcLatitude}, Lon=${srcLongitude}, Destination: Lat=${dstLatitude}, Lon=${dstLongitude}, SOC=${soc} and measure=${measure} and EVCar =`
   );
+  console.log(evCar)
 
   var path = [];
   var stops = new Set(); //Stations that are part of the path
@@ -223,7 +236,8 @@ app.get("/ecoroutePath", async (req, res) => {
       1,
       stops,
       path,
-      measure
+      measure,
+      evCar
     );
      
     res.send(resultantPath)
@@ -241,8 +255,10 @@ async function ecorouteIsochone(
   steps,
   stops,
   path,
-  measure
+  measure,
+  evCar
 ) {
+
 
     path.push([srcLongitude, srcLatitude]);
     
@@ -253,20 +269,25 @@ async function ecorouteIsochone(
     var URL = interfaces.getIsochroneURL(srcLatitude, srcLongitude, soc);
     console.log(`\nERR: Finding the isochrone for ${URL}`);
 
+
     const isochrone_response = await fetch(URL, {method: 'GET'});
     if(isochrone_response === null || isochrone_response === undefined || isochrone_response == undefined){
       return "ERR: Unable to find isochrone"
     }
+    
     const isochrone_data = await isochrone_response.json(); 
+    
     if(isochrone_data === null || isochrone_data === undefined || isochrone_data == undefined || isochrone_data.features == undefined){
       return "ERR: Unable to find isochrone"
     }
+    
     var foundInDestination = util.destinationPresentInBoundingBox(
       dstLatitude,
       dstLongitude,
       isochrone_data
     );
 
+    
     if (foundInDestination === true) {
       path.push([dstLongitude, dstLatitude]);
       console.log(
@@ -277,7 +298,8 @@ async function ecorouteIsochone(
 
 
     else if (foundInDestination === false) {
-          var nextChargingStation = await util.findAdmissibleChargingStation(
+    
+      var nextChargingStation = await util.findAdmissibleChargingStation(
             srcLatitude,
             srcLongitude,
             isochrone_data,
@@ -285,7 +307,8 @@ async function ecorouteIsochone(
             dstLatitude,
             dstLongitude,
             stops,
-            measure
+            measure,
+            evCar
           );  
 
           if (
@@ -296,10 +319,11 @@ async function ecorouteIsochone(
 
             return  "ERR: Unable to find appropriate charging stations";
             
-
           } else {
-           
+    
+            
             stops.add(nextChargingStation);
+            console.log(nextChargingStation)
             
             const isochrone_child_response = await ecorouteIsochone(
               nextChargingStation.position.lat,
@@ -310,7 +334,8 @@ async function ecorouteIsochone(
               steps + 1,
               stops,
               path,
-              measure
+              measure,
+              evCar
             );
             return isochrone_child_response
           }

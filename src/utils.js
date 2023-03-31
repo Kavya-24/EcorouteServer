@@ -6,6 +6,15 @@ class Util {
   
   static distanceOptions = { units: "kilometers" };
   
+  
+  static printFn(p_station){
+
+    
+    console.log('\"'+p_station._station.poi.name + "\",")
+    console.log('[' +[p_station._station.position.lat, p_station._station.position.lon]+"],")
+  }
+
+
   //private
   static getBoundingPolygon(coordinates) {
     var polygonCoordinates = [];
@@ -27,27 +36,28 @@ class Util {
     return pathWaypoints;
   }
 
-
-  //private
-  static astar_cost(_srcPoint, _dstPoint, _stationPoint) {
-    var gn = turf.distance(_srcPoint, _stationPoint, this.distanceOptions);
-    var hn = turf.distance(_dstPoint, _stationPoint, this.distanceOptions);
-    return gn + hn;
+  static line_distance(_srcPoint, _dstPoint,_stationPoint){
+    const midpoint = turf.midpoint(_srcPoint, _dstPoint);
+    return turf.distance(_stationPoint,midpoint, this.distanceOptions)
+  }
+  static cost_function(_srcPoint, _dstPoint, _stationPoint){
+    var cost_gn = turf.distance(_srcPoint, _stationPoint, this.distanceOptions);
+    var cost_hn = turf.distance(_dstPoint, _stationPoint, this.distanceOptions);
+    var cost_ln = this.line_distance(_srcPoint,_dstPoint,_stationPoint);
+    return {_gn:cost_gn, _hn:cost_hn, _ln:cost_ln}
   }
 
-  //private
-  static prioritizeArray(pq) {
-    pq.sort(function (a, b) {
-      var keyA = a._fn,
-        keyB = b._fn;
 
-      if (keyA < keyB) return -1;
-      if (keyA > keyB) return 1;
-      return 0;
-    });
-
-    return pq;
+  static sortStations(a, b) {
+    
+    const weightSource = 0.1;          // prioritize distance to source over distance to destination
+    const weightDestination = 0.5;
+    const weightLine = 0.4;
+    var aScore = (weightSource * a._cost_object._gn) + (weightDestination * a._cost_object._hn) + (weightLine* a._cost_object._ln);
+    var bScore = (weightSource * b._cost_object._gn) + (weightDestination * b._cost_object._hn) + (weightLine* b._cost_object._ln);
+    return aScore - bScore;
   }
+  
 
   //private
   static findStationsInIsochrone(
@@ -58,7 +68,7 @@ class Util {
     dstPoint
   ) {
     var stationsInQueue = [];
-
+    
     for (var i = 0; i < chargingStationsData.length; i++) {
       var c = chargingStationsData[i];
 
@@ -68,26 +78,26 @@ class Util {
           boundingPolygon
         )
       ) {
-        var fn = this.astar_cost(
+        var cost_object = this.cost_function(
           srcPoint,
           dstPoint,
-          turf.point([c.position.lon, c.position.lat])
+          turf.point([this.coordinate_parse(c.position.lon), this.coordinate_parse(c.position.lat)])
         );
 
         if (stops.has(c) === false) {
-          stationsInQueue.push({ _fn: fn, _station: c });
+          stationsInQueue.push({ _cost_object: cost_object, _station: c });
         }
       }
     }
 
-    stationsInQueue = this.prioritizeArray(stationsInQueue);
-    
+    stationsInQueue.sort(this.sortStations)
     console.log("Stations found: " + stationsInQueue.length)
-    if(stationsInQueue.length === 9){
-      for(let i =0; i <= stationsInQueue.length; i++){
-        console.log(stationsInQueue[i])
-      }
-    }
+
+    
+    // for(let i=0; i<stationsInQueue.length; i++){
+    //   this.printFn(stationsInQueue[i])
+    // } 
+
     return stationsInQueue;
   }
 
@@ -100,6 +110,20 @@ class Util {
     return turf.booleanPointInPolygon(destinationPoint, boundingPolygon);
   }
 
+  static coordinate_parse(str){
+    return parseFloat(str).toFixed(8);
+  }
+
+
+  static async request_appropriate_station(admissibleStations, evCar)
+  {
+
+    //now, here we have the stations. 
+    
+    return admissibleStations[0]._station
+
+  }
+
   static async findAdmissibleChargingStation(
     srcLatitude,
     srcLongitude,
@@ -108,10 +132,12 @@ class Util {
     dstLatitude,
     dstLongitude,
     stops,
-    measure
+    measure,
+    evCar
   ) {
     var srcPoint = turf.point([srcLongitude, srcLatitude]);
     var dstPoint = turf.point([dstLongitude, dstLatitude]);
+
 
     var boundingPolygon = this.getBoundingPolygon(
       isochroneResponse.features[0].geometry.coordinates[0]
@@ -129,9 +155,14 @@ class Util {
     if(admissibleStations.length < 1){
       return null
     }
-
+    
+    
     if(measure === "unoptimized"){
-      return admissibleStations[0]._station
+
+      console.log("\n\nUnOptimized Metric: ")
+      this.printFn(admissibleStations[0])
+
+      return await this.request_appropriate_station(admissibleStations,evCar)
     }
 
     if(measure === "time"){
@@ -139,8 +170,9 @@ class Util {
       return _station
     }
     
-    var _station = energy_coefficient.optimize(admissibleStations, srcLatitude, srcLongitude)
-    return _station
+    var _station = await energy_coefficient.optimize(admissibleStations, srcLatitude, srcLongitude)
+    this.printFn(admissibleStations[_station])
+    return admissibleStations[_station]._station
   }
 }
 
