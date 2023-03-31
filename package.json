@@ -10,7 +10,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@datastructures-js/priority-queue": "^6.2.0",
     "@mapbox/mapbox-sdk": "^0.14.0",
     "@turf/boolean-point-in-polygon": "^6.5.0",
     "@turf/helpers": "^6.5.0",
