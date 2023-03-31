@@ -1,19 +1,18 @@
 const turf = require("@turf/turf");
-const time_coefficient = require('./timeobjective')
-const energy_coefficient = require('./energyobjective')
+const time_coefficient = require("./timeobjective");
+const energy_coefficient = require("./energyobjective");
 
 class Util {
-  
   static distanceOptions = { units: "kilometers" };
-  
-  
-  static printFn(p_station){
 
-    
-    console.log('\"'+p_station._station.poi.name + "\",")
-    console.log('[' +[p_station._station.position.lat, p_station._station.position.lon]+"],")
+  static printFn(p_station) {
+    console.log('"' + p_station._station.poi.name + '",');
+    console.log(
+      "[" +
+        [p_station._station.position.lat, p_station._station.position.lon] +
+        "],"
+    );
   }
-
 
   //private
   static getBoundingPolygon(coordinates) {
@@ -36,28 +35,31 @@ class Util {
     return pathWaypoints;
   }
 
-  static line_distance(_srcPoint, _dstPoint,_stationPoint){
+  static line_distance(_srcPoint, _dstPoint, _stationPoint) {
     const midpoint = turf.midpoint(_srcPoint, _dstPoint);
-    return turf.distance(_stationPoint,midpoint, this.distanceOptions)
+    return turf.distance(_stationPoint, midpoint, this.distanceOptions);
   }
-  static cost_function(_srcPoint, _dstPoint, _stationPoint){
+  static cost_function(_srcPoint, _dstPoint, _stationPoint) {
     var cost_gn = turf.distance(_srcPoint, _stationPoint, this.distanceOptions);
     var cost_hn = turf.distance(_dstPoint, _stationPoint, this.distanceOptions);
-    var cost_ln = this.line_distance(_srcPoint,_dstPoint,_stationPoint);
-    return {_gn:cost_gn, _hn:cost_hn, _ln:cost_ln}
+    var cost_ln = this.line_distance(_srcPoint, _dstPoint, _stationPoint);
+    return { _gn: cost_gn, _hn: cost_hn, _ln: cost_ln };
   }
-
 
   static sortStations(a, b) {
-    
-    const weightSource = 0.1;          // prioritize distance to source over distance to destination
+    const weightSource = 0.1; // prioritize distance to source over distance to destination
     const weightDestination = 0.5;
     const weightLine = 0.4;
-    var aScore = (weightSource * a._cost_object._gn) + (weightDestination * a._cost_object._hn) + (weightLine* a._cost_object._ln);
-    var bScore = (weightSource * b._cost_object._gn) + (weightDestination * b._cost_object._hn) + (weightLine* b._cost_object._ln);
+    var aScore =
+      weightSource * a._cost_object._gn +
+      weightDestination * a._cost_object._hn +
+      weightLine * a._cost_object._ln;
+    var bScore =
+      weightSource * b._cost_object._gn +
+      weightDestination * b._cost_object._hn +
+      weightLine * b._cost_object._ln;
     return aScore - bScore;
   }
-  
 
   //private
   static findStationsInIsochrone(
@@ -68,7 +70,7 @@ class Util {
     dstPoint
   ) {
     var stationsInQueue = [];
-    
+
     for (var i = 0; i < chargingStationsData.length; i++) {
       var c = chargingStationsData[i];
 
@@ -81,7 +83,10 @@ class Util {
         var cost_object = this.cost_function(
           srcPoint,
           dstPoint,
-          turf.point([this.coordinate_parse(c.position.lon), this.coordinate_parse(c.position.lat)])
+          turf.point([
+            this.coordinate_parse(c.position.lon),
+            this.coordinate_parse(c.position.lat),
+          ])
         );
 
         if (stops.has(c) === false) {
@@ -90,13 +95,12 @@ class Util {
       }
     }
 
-    stationsInQueue.sort(this.sortStations)
-    console.log("Stations found: " + stationsInQueue.length)
+    stationsInQueue.sort(this.sortStations);
+    console.log("Stations found: " + stationsInQueue.length);
 
-    
     // for(let i=0; i<stationsInQueue.length; i++){
     //   this.printFn(stationsInQueue[i])
-    // } 
+    // }
 
     return stationsInQueue;
   }
@@ -110,18 +114,14 @@ class Util {
     return turf.booleanPointInPolygon(destinationPoint, boundingPolygon);
   }
 
-  static coordinate_parse(str){
+  static coordinate_parse(str) {
     return parseFloat(str).toFixed(8);
   }
 
+  static async request_appropriate_station(admissibleStations, evCar) {
+    //now, here we have the stations.
 
-  static async request_appropriate_station(admissibleStations, evCar)
-  {
-
-    //now, here we have the stations. 
-    
-    return admissibleStations[0]._station
-
+    return admissibleStations[0]._station;
   }
 
   static async findAdmissibleChargingStation(
@@ -138,7 +138,6 @@ class Util {
     var srcPoint = turf.point([srcLongitude, srcLatitude]);
     var dstPoint = turf.point([dstLongitude, dstLatitude]);
 
-
     var boundingPolygon = this.getBoundingPolygon(
       isochroneResponse.features[0].geometry.coordinates[0]
     );
@@ -151,28 +150,33 @@ class Util {
       dstPoint
     );
 
-  
-    if(admissibleStations.length < 1){
-      return null
-    }
-    
-    
-    if(measure === "unoptimized"){
-
-      console.log("\n\nUnOptimized Metric: ")
-      this.printFn(admissibleStations[0])
-
-      return await this.request_appropriate_station(admissibleStations,evCar)
+    if (admissibleStations.length < 1) {
+      return null;
     }
 
-    if(measure === "time"){
-      var _station = await time_coefficient.optimize(admissibleStations, srcLatitude, srcLongitude) 
-      return _station
+    if (measure === "unoptimized") {
+      console.log("\n\nUnOptimized Metric: ");
+      this.printFn(admissibleStations[0]);
+
+      return await this.request_appropriate_station(admissibleStations, evCar);
     }
-    
-    var _station = await energy_coefficient.optimize(admissibleStations, srcLatitude, srcLongitude)
-    this.printFn(admissibleStations[_station])
-    return admissibleStations[_station]._station
+
+    if (measure === "time") {
+      var _station = await time_coefficient.optimize(
+        admissibleStations,
+        srcLatitude,
+        srcLongitude
+      );
+      return _station;
+    }
+
+    var _station = await energy_coefficient.optimize(
+      admissibleStations,
+      srcLatitude,
+      srcLongitude
+    );
+    this.printFn(admissibleStations[_station]);
+    return admissibleStations[_station]._station;
   }
 }
 

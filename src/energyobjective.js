@@ -68,7 +68,11 @@ class EnergyObjective {
     for (let l = 0; l < directions.routes[0].legs.length; l++) {
       for (let s = 0; s < directions.routes[0].legs[l].steps.length; s++) {
         step = directions.routes[0].legs[l].steps[s];
-        _weight_ += step.distance + step.distance * this.extract_point_cost(step.maneuver.type) * this.SCALE_ALPHA;
+        _weight_ +=
+          step.distance +
+          step.distance *
+            this.extract_point_cost(step.maneuver.type) *
+            this.SCALE_ALPHA;
       }
     }
     return _weight_;
@@ -87,15 +91,20 @@ class EnergyObjective {
         steps: true,
         bannerInstructions: true,
       })
-      .send()
-    var response = await directionResponse.body
+      .send();
+    var response = await directionResponse.body;
     return this.step_weight(response) + this.height_weight(response);
   }
 
-  static async optimizeTurnsHeight(admissibleStations, srcLatitude, srcLongitude) {
+  static async optimizeTurnsHeight(
+    admissibleStations,
+    srcLatitude,
+    srcLongitude
+  ) {
     var T = this.ENERGY_OBJECTIVE_OPTIONS;
-    var path = []
-    var idx = 0, pathW =  Number.MAX_SAFE_INTEGER
+    var path = [];
+    var idx = 0,
+      pathW = Number.MAX_SAFE_INTEGER;
     for (let i = 0; i < admissibleStations.length; i++) {
       if (T === 0) {
         break;
@@ -110,27 +119,26 @@ class EnergyObjective {
       path.push([_evStation.position.lon, _evStation.position.lat]);
 
       var path_weight = await this.intermediateRoute(path);
-      if(path_weight < pathW){
+      if (path_weight < pathW) {
         idx = i;
-        pathW = path_weight
+        pathW = path_weight;
       }
     }
     return idx;
   }
 
   static async optimize(admissibleStations, srcLatitude, srcLongitude) {
-
-    if (admissibleStations.length < 1) {                  /**There are no stations to choose from optimal */
+    if (admissibleStations.length < 1) {
+      /**There are no stations to choose from optimal */
       return null;
     }
-    
 
     var station_index = await this.optimizeTurnsHeight(
       admissibleStations,
       srcLatitude,
       srcLongitude
     );
-    console.log("\n\n\n\nStation at idx " + station_index + " used")
+    console.log("\n\n\n\nStation at idx " + station_index + " used");
     return station_index;
   }
 }

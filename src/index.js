@@ -8,10 +8,10 @@ const fetchtimeout = require("./fetchtimeout");
 const turf = require("@turf/turf");
 const Fuse = require("fuse.js");
 const util = require("./utils");
-const err = require('./errors')
+const err = require("./errors");
 const interfaces = require("./interfaces");
-const fetch = require('node-fetch');
-const {directionService} = require("./mapboxServices");
+const fetch = require("node-fetch");
+const { directionService } = require("./mapboxServices");
 
 const app = express();
 
@@ -159,7 +159,6 @@ app.get("/stationsInVicinity", (req, res) => {
   res.send(reqChargingStations);
 });
 
-
 /**
  * Wrapper API for getting the desired results for User
  * Inputs:Lat1, Lon1, Lat2,Lon2, SOC
@@ -174,11 +173,10 @@ app.get("/ecoroutePath", async (req, res) => {
   const dstLatitude = req.query.lat2;
   const dstLongitude = req.query.lon2;
 
-
   var measure = req.query.measure;
   var soc = req.query.soc;
   const evCarJson = req.query.evcar;
-  
+
   if (srcLatitude === undefined) {
     res.end("ERR: Add Source Latitude");
   }
@@ -203,17 +201,16 @@ app.get("/ecoroutePath", async (req, res) => {
     measure = "unoptimized";
   }
 
-  if(evCarJson === undefined){
+  if (evCarJson === undefined) {
     res.end("ERR: NO EV Car Configuration Found");
   }
-
 
   const evCar = JSON.parse(evCarJson);
 
   console.log(
     `\n\nRequest parameters: Source: Lat=${srcLatitude}, Lon=${srcLongitude}, Destination: Lat=${dstLatitude}, Lon=${dstLongitude}, SOC=${soc} and measure=${measure} and EVCar =`
   );
-  console.log(evCar)
+  console.log(evCar);
 
   var path = [];
   var stops = new Set(); //Stations that are part of the path
@@ -222,12 +219,9 @@ app.get("/ecoroutePath", async (req, res) => {
     path.push([srcLongitude, srcLatitude]);
     path.push([dstLongitude, dstLatitude]);
     var resultantPath = await findDirectionRoute(path);
-    res.send(resultantPath)
-  }
-
-  else{
-  
-      var resultantPath = await ecorouteIsochone(
+    res.send(resultantPath);
+  } else {
+    var resultantPath = await ecorouteIsochone(
       srcLatitude,
       srcLongitude,
       dstLatitude,
@@ -239,11 +233,9 @@ app.get("/ecoroutePath", async (req, res) => {
       measure,
       evCar
     );
-     
-    res.send(resultantPath)
-    
+
+    res.send(resultantPath);
   }
-  
 });
 
 async function ecorouteIsochone(
@@ -258,156 +250,144 @@ async function ecorouteIsochone(
   measure,
   evCar
 ) {
+  path.push([srcLongitude, srcLatitude]);
 
+  if (path.length >= 20) {
+    return "ERR: Too long path";
+  }
 
-    path.push([srcLongitude, srcLatitude]);
-    
-    if(path.length >= 20){
-      return "ERR: Too long path";
-    }
-    
-    var URL = interfaces.getIsochroneURL(srcLatitude, srcLongitude, soc);
-    console.log(`\nERR: Finding the isochrone for ${URL}`);
+  var URL = interfaces.getIsochroneURL(srcLatitude, srcLongitude, soc);
+  console.log(`\nERR: Finding the isochrone for ${URL}`);
 
+  const isochrone_response = await fetch(URL, { method: "GET" });
+  if (
+    isochrone_response === null ||
+    isochrone_response === undefined ||
+    isochrone_response == undefined
+  ) {
+    return "ERR: Unable to find isochrone";
+  }
 
-    const isochrone_response = await fetch(URL, {method: 'GET'});
-    if(isochrone_response === null || isochrone_response === undefined || isochrone_response == undefined){
-      return "ERR: Unable to find isochrone"
-    }
-    
-    const isochrone_data = await isochrone_response.json(); 
-    
-    if(isochrone_data === null || isochrone_data === undefined || isochrone_data == undefined || isochrone_data.features == undefined){
-      return "ERR: Unable to find isochrone"
-    }
-    
-    var foundInDestination = util.destinationPresentInBoundingBox(
+  const isochrone_data = await isochrone_response.json();
+
+  if (
+    isochrone_data === null ||
+    isochrone_data === undefined ||
+    isochrone_data == undefined ||
+    isochrone_data.features == undefined
+  ) {
+    return "ERR: Unable to find isochrone";
+  }
+
+  var foundInDestination = util.destinationPresentInBoundingBox(
+    dstLatitude,
+    dstLongitude,
+    isochrone_data
+  );
+
+  if (foundInDestination === true) {
+    path.push([dstLongitude, dstLatitude]);
+    console.log(
+      `ERR: Destination found in the current isochrone. Number of steps = ${steps}. Path size= ${path.length}`
+    );
+    return findDirectionRoute(path);
+  } else if (foundInDestination === false) {
+    var nextChargingStation = await util.findAdmissibleChargingStation(
+      srcLatitude,
+      srcLongitude,
+      isochrone_data,
+      chargingStationsData,
       dstLatitude,
       dstLongitude,
-      isochrone_data
+      stops,
+      measure,
+      evCar
     );
 
-    
-    if (foundInDestination === true) {
-      path.push([dstLongitude, dstLatitude]);
-      console.log(
-        `ERR: Destination found in the current isochrone. Number of steps = ${steps}. Path size= ${path.length}`
+    if (
+      nextChargingStation == null ||
+      nextChargingStation === null ||
+      nextChargingStation === undefined
+    ) {
+      return "ERR: Unable to find appropriate charging stations";
+    } else {
+      stops.add(nextChargingStation);
+      console.log(nextChargingStation);
+
+      const isochrone_child_response = await ecorouteIsochone(
+        nextChargingStation.position.lat,
+        nextChargingStation.position.lon,
+        dstLatitude,
+        dstLongitude,
+        100,
+        steps + 1,
+        stops,
+        path,
+        measure,
+        evCar
       );
-      return findDirectionRoute(path);
+      return isochrone_child_response;
     }
-
-
-    else if (foundInDestination === false) {
-    
-      var nextChargingStation = await util.findAdmissibleChargingStation(
-            srcLatitude,
-            srcLongitude,
-            isochrone_data,
-            chargingStationsData,
-            dstLatitude,
-            dstLongitude,
-            stops,
-            measure,
-            evCar
-          );  
-
-          if (
-            nextChargingStation == null ||
-            nextChargingStation === null ||
-            nextChargingStation === undefined
-          ) {
-
-            return  "ERR: Unable to find appropriate charging stations";
-            
-          } else {
-    
-            
-            stops.add(nextChargingStation);
-            console.log(nextChargingStation)
-            
-            const isochrone_child_response = await ecorouteIsochone(
-              nextChargingStation.position.lat,
-              nextChargingStation.position.lon,
-              dstLatitude,
-              dstLongitude,
-              100,
-              steps + 1,
-              stops,
-              path,
-              measure,
-              evCar
-            );
-            return isochrone_child_response
-          }
-        } else {
-          return "ERR: Unable to find destination in isochrone";
-        }
-  
-  
-      }
-
-
-async function findDirectionRoute(path) {
-  
-  var resultantPath = []
-  for(let p = 0; p < path.length; p++){
-    resultantPath.push({
-      "lat" : path[p][1],
-      "lon" : path[p][0]
-    })
+  } else {
+    return "ERR: Unable to find destination in isochrone";
   }
-  return resultantPath
 }
 
-app.get('/getPathV1', async (req, res) => {
-  
-  let srcLong = req.query.srcLong; 
-  let srcLat = req.query.srcLat; 
-  let destLong = req.query.destLong; 
-  let destLat = req.query.destLat; 
+async function findDirectionRoute(path) {
+  var resultantPath = [];
+  for (let p = 0; p < path.length; p++) {
+    resultantPath.push({
+      lat: path[p][1],
+      lon: path[p][0],
+    });
+  }
+  return resultantPath;
+}
+
+app.get("/getPathV1", async (req, res) => {
+  let srcLong = req.query.srcLong;
+  let srcLat = req.query.srcLat;
+  let destLong = req.query.destLong;
+  let destLat = req.query.destLat;
 
   let url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${srcLong},${srcLat};${destLong},${destLat}?geometries=geojson&access_token=pk.eyJ1Ijoia2F2eWEtMjQiLCJhIjoiY2w2Y2xhc2JpMW80MjNrcDNuZ3hwdDVxNSJ9.yRixm6cK2FVMVYiBk8AbDw`;
 
-  const response = await fetch(url, {method: 'GET'});
-  const data = await response.json(); 
+  const response = await fetch(url, { method: "GET" });
+  const data = await response.json();
 
   res.send(data);
-
 });
 
 /**
- * Returns path between source and destination 
- * takes source and destination coordinates as query parameters 
+ * Returns path between source and destination
+ * takes source and destination coordinates as query parameters
  * sample: http://localhost:6001/getPathV2?srcLong=-84.518641&srcLat=39.134270&destLong=-84.512023&destLat=39.102779
  */
-app.get('/getPathV2', async (req, res) => {
-  
-  let srcLong = Number(req.query.srcLong); 
-  let srcLat = Number(req.query.srcLat); 
-  let destLong = Number(req.query.destLong); 
-  let destLat = Number(req.query.destLat); 
+app.get("/getPathV2", async (req, res) => {
+  let srcLong = Number(req.query.srcLong);
+  let srcLat = Number(req.query.srcLat);
+  let destLong = Number(req.query.destLong);
+  let destLat = Number(req.query.destLat);
 
   directionService
-      .getDirections({
-        profile: "driving-traffic",
-        waypoints: [
-          {
-            coordinates: [srcLong, srcLat]
-          },
-          {
-            coordinates: [destLong, destLat]
-          },
-        ],
-        geometries: "geojson"
-      })
-      .send()
-      .then((response) => {
-        const directions = response.body;
-        res.send(directions);
-      });
+    .getDirections({
+      profile: "driving-traffic",
+      waypoints: [
+        {
+          coordinates: [srcLong, srcLat],
+        },
+        {
+          coordinates: [destLong, destLat],
+        },
+      ],
+      geometries: "geojson",
+    })
+    .send()
+    .then((response) => {
+      const directions = response.body;
+      res.send(directions);
+    });
 });
-
-
 
 const port = process.env.PORT || 6001;
 
