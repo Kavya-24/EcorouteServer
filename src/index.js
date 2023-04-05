@@ -165,7 +165,7 @@ app.get("/stationsInVicinity", (req, res) => {
  * Sample Query: http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=28.5673&lon2=77.3211&soc=10
  * //Delhi-Mumbai Query: http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=19.0760&lon2=72.8777&soc=10&measure=time
  * By default, SOC = full-charge = 100%
- * http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=28.5673&lon2=77.3211&soc=40&evcar={%22carName%22:%20%22Tesla%20Model%20S%22,%20%22carAge%22:%20365,%20%22carMileage%22:%20400,%20%22carBatterCapacity%22:%20100,%20%22carConnector%22:%20%22Type%202%22,%20%22carChargerType%22:%20%22fast%22}
+ * http://localhost:6001/ecoroutePath?lat1=28.632980346679688&lon1=77.21929168701172&lat2=28.464277267456055&lon2=77.50794219970703&soc=63&measure=energy&evcar={%22carAge%22:59,%22carBatterCapacity%22:78,%22carChargerType%22:%22Normal%22,%22carConnector%22:[%22IEC62196Type3%22,%22IEC62196Type2CableAttached%22,%22IEC60309DCWhite%22],%22carMileage%22:484,%22carName%22:%22zban%22}
  */
 app.get("/ecoroutePath", async (req, res) => {
   const srcLatitude = req.query.lat1;
@@ -301,7 +301,8 @@ async function ecorouteIsochone(
       dstLongitude,
       stops,
       measure,
-      evCar
+      evCar,
+      soc
     );
 
     if (

@@ -1,5 +1,3 @@
-const util = require("./utils");
-const err = require("./errors")
 
 const mapboxClient = require("@mapbox/mapbox-sdk");
 const baseClient = mapboxClient({
@@ -10,8 +8,7 @@ const mapboxMatrixService = require("@mapbox/mapbox-sdk/services/matrix");
 const matrixService = mapboxMatrixService(baseClient);
 
 class TimeObjective {
-  static TIME_OBJECTIVE_OPTIONS = 5;
-  static MAX_TIME_STATION = 60*60*4; //4 Hours
+
 
    static findPathWaypoints(path) {
     var pathWaypoints = [];
@@ -73,11 +70,11 @@ class TimeObjective {
     return admissibleStations[idx]._station
   }
 
-  static async optimize(admissibleStations, srcLatitude, srcLongitude){
+  static async optimize(admissibleStations, srcLatitude, srcLongitude, dstLatitude, dstLongitude){
 
 
     if(admissibleStations.length < 1){
-       return err.ERR_MESSAGE_NO_STATIONS
+       return null
     }
     
     var matrix = await this.optimizeTimeDistanceMatrix(admissibleStations, srcLatitude, srcLongitude)
