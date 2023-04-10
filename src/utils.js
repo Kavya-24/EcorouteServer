@@ -176,64 +176,162 @@ class Util {
     return parseFloat(str).toFixed(8);
   }
 
-
+  /* returns final soc after travelling and just reaching charging station */
   static soc_consumption(
     initial_soc,
-    srcLatitude,
-    srcLongitude,
     evCar,
-    path_response,
-    measure
+    path_response
   ) {
-    var consumption_distance = path_response.weights.weights.total_distance;
+
+    console.log(path_response)
+    
+    var consumption_distance = path_response._response.routes[0].distance / 1000;
+    
     var scale_consumption = evCar.carBatterCapacity / evCar.carMileage;
     var total_consumption = consumption_distance * scale_consumption; //consumption in kwh
     var total_soc = evCar.carBatterCapacity * (initial_soc / 100); //soc in kwh
 
+    // console.log(`For the station with id: ${path_response._station.id} and soc at source as ${initial_soc} and distance = ${consumption_distance}`)
+    // console.log( `It traels for ${evCar.carBatterCapacity} kwh per ${evCar.carMileage} km`)
+    // console.log(`Therefore, it will consume: ${total_consumption} kwh`)
+    // console.log(`The initial soc units is given by ${total_soc}`)
+    
     if (total_soc < total_consumption) {
       return 0;
     }
     var final_soc =
       ((total_soc - total_consumption) / evCar.carBatterCapacity) * 100;
+    console.log(final_soc)
     return final_soc;
   }
 
-  static async format_availability_request(path_responses,soc, evCar){
+  /* returns final soc after charging */
+  static soc_gained(initial_soc, charging_time, evCar){
 
-    /**for all the optimal stations in order, I want to request in the designated format */
-    // {
-    //   "start_time" : 300,
-    //   "end_time" : 400,
-    //   "cs_queue": ["dBK-On6XfGWQECVAxzUyxg"],
-    //   "soc" : 10,
-    //   "battery_capacity":61,
-    //   "mileage":300,
-    //   "connectors":["StandardHouseholdCountrySpecific"]
-    //   }
+      var time_taken = 45*60
+      if(evCar.carChargerType === "Normal"){ time_taken = 60*60}
+      if(evCar.carChargerType === "Slow"){ time_taken = 90*60}
+      
+      if(charging_time >= time_taken){
+        return {final_soc : 100, time_taken : time_taken}
+      }
+
+      return {final_soc: (100 * ( charging_time)) / time_taken , time_taken : charging_time }
+
+  }
+
+  static format_date_minutes(current_unix, source_unix){
+
+    
+    const original_midnight = Math.floor(source_unix / 86400) * 86400;
+    const elapsed_seconds = current_unix - original_midnight;
+    const elapsed_minutes = Math.floor(elapsed_seconds / 60);
+
+    console.log(`CurrentUnix=${current_unix}, SourceUnix=${source_unix}`)
+    console.log(`OriginalMidnight ${original_midnight}`)    
+    console.log(`Elapsed min-sec ${elapsed_minutes} and ${elapsed_seconds}`)
+
+    return elapsed_minutes;
+
+  }
+
+  static format_station_response(node_state, path_responses, idx, charging_time,port,evCar, station_request_id){
+
+    var station_reached_time = node_state.node_time + path_responses[idx]._response.routes[0].duration;
+    var soc_change = this.soc_gained(node_state.node_exit_soc,charging_time,evCar);
+    
+    console.log(`\n\n\nformat for node_state station reached at ${station_reached_time} and charged in ${soc_change.time_taken}`)
+
+    return {station: path_responses[idx]._station, 
+      node_state:   {
+                      node_soc    :  this.soc_consumption(node_state.node_exit_soc,evCar,path_responses[idx]), 
+                      node_time   :  station_reached_time + charging_time,
+                      source_time :  node_state.source_time,
+                      node_exit_soc : soc_change.final_soc
+
+                    },
+      charger_state:{
+                      entry_time: station_reached_time,
+                      exit_time : station_reached_time + soc_change.time_taken,
+                      exit_soc  : soc_change.final_soc,
+                      port      : port,
+                      request_id: station_request_id
+                    }
+      
+    };
+  }
+
+  static format_availability_request(path_responses,node_state, charging_time,evCar){
+
+
+    var requestJSON =   
+    { "start_time":  [], 
+      "end_time": [], 
+      "cs_queue": [], 
+      "battery_capacity":0,
+      "connectors":[]
+    }
+
+
+    requestJSON["battery_capacity"] = evCar.carBatterCapacity;
+    for(var i=0; i<evCar.carConnector.length; i++){
+        requestJSON["connectors"].push(evCar.carConnector[i])
+    }
 
     
 
+
+    for(var i=0; i< path_responses.length; i++){  
+        var station_response = path_responses[i];
+        var station_reached_time = node_state.node_time + station_response._response.routes[0].duration;
+        console.log(`\n\n\nstation-reached at: ${station_reached_time} and ${station_response._station.id}:\n`)
+        requestJSON["start_time"].push(this.format_date_minutes(station_reached_time, node_state.source_time));
+        requestJSON["end_time"].push(this.format_date_minutes(station_reached_time + charging_time,node_state.source_time));
+        requestJSON["cs_queue"].push(station_response._station.id);
+    }
+
+    return requestJSON;
+
   }
-  static async request_appropriate_station(path_responses,soc, measure, evCar) {    
+  static async request_appropriate_station(path_responses,node_state, measure, evCar) {    
 
-    // fetch("https://ev-scheduler-zlj6.onrender.com", {
-    //   method: "POST",
-    //   headers: {
-    //     "Content-Type": "application/json",
-    //   },
-    //   body: JSON.stringify({
-    //     key1: "value1",
-    //     key2: "value2",
-    //   }),
-    // })
-    //   .then((response) => response.json())
-    //   .then((data) => {
-        
-    //   })
-    //   .catch((error) => {
-        
-    //   });
+    var charging_time = 7200;
+    if(measure === 'time'){
+      charging_time = 3600;
+    } 
+    var requestJSON = this.format_availability_request(path_responses,node_state,charging_time,evCar) 
+    
+    console.log(requestJSON)
 
+    const response = await fetch("https://ev-scheduler-zlj6.onrender.com", { 
+      method : "POST",
+      headers: {
+                "Content-Type": "application/json",
+              },
+      body   : JSON.stringify(requestJSON)});
+
+    const data = await response.json();
+    console.log(data)
+
+    if(data === null || data === undefined || data == undefined || data.success === 0){
+      return this.format_station_response(node_state,path_responses,0,charging_time,0,evCar,null);
+    }
+
+    else{
+      var station_id = data.port.slice(0,-3);
+      var station_port = parseInt(data.port.charAt(data.port.length - 1))   
+      console.log(`Found the station ${station_id} with port ${station_port}`);
+
+      var idx = 0
+
+      for(var i=0; i<path_responses.length; i++){
+        if(path_responses[i]._station.id === station_id){
+          idx = i;
+          break;
+        }
+      }
+      return this.format_station_response(node_state,path_responses,idx,charging_time,station_port,evCar,data.id);
+    }
 
   }
 
@@ -297,7 +395,7 @@ class Util {
     dstLongitude,
     evCar,
     measure,
-    soc
+    node_state
   ) {
     var T = this.STATION_COUNT;
     var path = [];
@@ -315,6 +413,7 @@ class Util {
       path.push([srcLongitude, srcLatitude]);
       path.push([_evStation.position.lon, _evStation.position.lat]);
       var path_response = await this.intermediateRoute(path);
+      
       path_responses.push({
         _station: _evStation,
         _response: path_response,
@@ -322,9 +421,16 @@ class Util {
       });
     }
 
+
+    if(measure === "unoptimized"){
+      return this.format_station_response(node_state,path_responses,0,10800,0,evCar,null);
+    }
+  
+
     path_responses.sort(this.sortOptimalStations);
 
-    return await this.request_appropriate_station(path_responses,soc,measure,evCar);
+
+    return await this.request_appropriate_station(path_responses,node_state,measure,evCar);
   }
 
   static async findAdmissibleChargingStation(
@@ -337,7 +443,7 @@ class Util {
     stops,
     measure,
     evCar,
-    soc
+    node_state
   ) {
     var srcPoint = turf.point([srcLongitude, srcLatitude]);
     var dstPoint = turf.point([dstLongitude, dstLatitude]);
@@ -359,12 +465,6 @@ class Util {
       return null;
     }
 
-    if (measure === "unoptimized") {
-      console.log("\n\nUnOptimized Metric: ");
-      this.printFn(admissibleStations[0]);
-      return admissibleStations[0]._station;
-    }
-
     var optimal_station = await this.optimizeObjectives(
       admissibleStations,
       srcLatitude,
@@ -373,15 +473,15 @@ class Util {
       dstLongitude,
       evCar,
       measure,
-      soc
+      node_state
     );
-    // return optimal_station
-    return admissibleStations[0]._station;
+    
+    return optimal_station;
+    
   }
 }
 
 /**
- * http://localhost:6001/ecoroutePath?lat1=28.6304&lon1=77.2177&lat2=26.9124&lon2=75.7873&soc=10&measure=petrol
  * Query helpers
  * Rajiv Chowk : lat1=28.6304&lon1=77.2177
  * DLF Mall : lat2=28.5673&lon2=77.3211

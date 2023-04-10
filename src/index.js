@@ -206,14 +206,19 @@ app.get("/ecoroutePath", async (req, res) => {
   }
 
   const evCar = JSON.parse(evCarJson);
-
+  const date_object = new Date();
+  var current_timestamp = Math.floor(date_object.getTime() / 1000);
+  var node_state = {node_soc: soc, node_time : current_timestamp, source_time: current_timestamp, node_exit_soc : soc}
+  
   console.log(
-    `\n\nRequest parameters: Source: Lat=${srcLatitude}, Lon=${srcLongitude}, Destination: Lat=${dstLatitude}, Lon=${dstLongitude}, SOC=${soc} and measure=${measure} and EVCar =`
+    `\n\nRequest parameters: Source: Lat=${srcLatitude}, Lon=${srcLongitude}, Destination: Lat=${dstLatitude}, Lon=${dstLongitude}, and measure=${measure} and EVCar =`
   );
   console.log(evCar);
+  console.log(node_state);
 
   var path = [];
   var stops = new Set(); //Stations that are part of the path
+  var booked_station_data = []
 
   if (measure === "petrol") {
     path.push([srcLongitude, srcLatitude]);
@@ -226,9 +231,10 @@ app.get("/ecoroutePath", async (req, res) => {
       srcLongitude,
       dstLatitude,
       dstLongitude,
-      soc,
+      node_state,
       1,
       stops,
+      booked_station_data,
       path,
       measure,
       evCar
@@ -243,20 +249,22 @@ async function ecorouteIsochone(
   srcLongitude,
   dstLatitude,
   dstLongitude,
-  soc,
+  node_state,
   steps,
   stops,
+  booked_station_data,
   path,
   measure,
   evCar
 ) {
+
   path.push([srcLongitude, srcLatitude]);
 
   if (path.length >= 20) {
     return "ERR: Too long path";
   }
 
-  var URL = interfaces.getIsochroneURL(srcLatitude, srcLongitude, soc);
+  var URL = interfaces.getIsochroneURL(srcLatitude, srcLongitude, node_state.node_exit_soc);
   console.log(`\nERR: Finding the isochrone for ${URL}`);
 
   const isochrone_response = await fetch(URL, { method: "GET" });
@@ -290,7 +298,7 @@ async function ecorouteIsochone(
     console.log(
       `ERR: Destination found in the current isochrone. Number of steps = ${steps}. Path size= ${path.length}`
     );
-    return findDirectionRoute(path);
+    return findDirectionRoute(path, booked_station_data);
   } else if (foundInDestination === false) {
     var nextChargingStation = await util.findAdmissibleChargingStation(
       srcLatitude,
@@ -302,27 +310,30 @@ async function ecorouteIsochone(
       stops,
       measure,
       evCar,
-      soc
+      node_state
     );
 
     if (
-      nextChargingStation == null ||
-      nextChargingStation === null ||
-      nextChargingStation === undefined
+      nextChargingStation.station == null ||
+      nextChargingStation.station === null ||
+      nextChargingStation.station === undefined
     ) {
       return "ERR: Unable to find appropriate charging stations";
     } else {
-      stops.add(nextChargingStation);
-      console.log(nextChargingStation);
+      stops.add(nextChargingStation.station);
+      
+      booked_station_data.push({station : nextChargingStation.station, node_state : nextChargingStation.node_state, charger_state : nextChargingStation.charger_state})
+
 
       const isochrone_child_response = await ecorouteIsochone(
-        nextChargingStation.position.lat,
-        nextChargingStation.position.lon,
+        nextChargingStation.station.position.lat,
+        nextChargingStation.station.position.lon,
         dstLatitude,
         dstLongitude,
-        100,
+        nextChargingStation.node_state,
         steps + 1,
         stops,
+        booked_station_data,
         path,
         measure,
         evCar
@@ -334,7 +345,39 @@ async function ecorouteIsochone(
   }
 }
 
-async function findDirectionRoute(path) {
+async function reserve_station(booked_station_data, measure,){
+
+  if(measure === "unoptimzed"){ return;}
+
+  var book_stations = { "stations" : []}
+
+  for(var i = 0; i<booked_station_data.length; i++){
+      if(booked_station_data[i].request_id === null){ return; }
+
+      book_stations["stations"].push({request_id : booked_station_data[i].charger_state.request_id,
+                                      station_id : booked_station_data[i].station.id,
+                                      start_time : util.format_date_minutes(booked_station_data[i].charger_state.entry_time, booked_station_data[i].node_state.source_time),
+                                      end_time   : util.format_date_minutes(booked_station_data[i].charger_state.exit_time,booked_station_data[i].node_state.source_time),
+                                      port       : booked_station_data[i].charger_state.port})
+  }
+
+  console.log("\n\n\n")
+  console.log(book_stations)
+  return;
+  // const response = await fetch("https://ev-scheduler-zlj6.onrender.com", { 
+  //     method : "POST",
+  //     headers: {
+  //               "Content-Type": "application/json",
+  //             },
+  //     body   : JSON.stringify(book_stations)});
+
+  //   const data = await response.json();
+    
+}
+async function findDirectionRoute(path, booked_station_data, measure) {
+  
+  reserve_station(booked_station_data)
+
   var resultantPath = [];
   for (let p = 0; p < path.length; p++) {
     resultantPath.push({
