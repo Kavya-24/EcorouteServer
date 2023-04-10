@@ -227,9 +227,9 @@ class Util {
     const elapsed_seconds = current_unix - original_midnight;
     const elapsed_minutes = Math.floor(elapsed_seconds / 60);
 
-    console.log(`CurrentUnix=${current_unix}, SourceUnix=${source_unix}`)
-    console.log(`OriginalMidnight ${original_midnight}`)    
-    console.log(`Elapsed min-sec ${elapsed_minutes} and ${elapsed_seconds}`)
+    // console.log(`CurrentUnix=${current_unix}, SourceUnix=${source_unix}`)
+    // console.log(`OriginalMidnight ${original_midnight}`)    
+    // console.log(`Elapsed min-sec ${elapsed_minutes} and ${elapsed_seconds}`)
 
     return elapsed_minutes;
 
@@ -284,7 +284,7 @@ class Util {
     for(var i=0; i< path_responses.length; i++){  
         var station_response = path_responses[i];
         var station_reached_time = node_state.node_time + station_response._response.routes[0].duration;
-        console.log(`\n\n\nstation-reached at: ${station_reached_time} and ${station_response._station.id}:\n`)
+        // console.log(`\n\n\nstation-reached at: ${station_reached_time} and ${station_response._station.id}:\n`)
         requestJSON["start_time"].push(this.format_date_minutes(station_reached_time, node_state.source_time));
         requestJSON["end_time"].push(this.format_date_minutes(station_reached_time + charging_time,node_state.source_time));
         requestJSON["cs_queue"].push(station_response._station.id);
