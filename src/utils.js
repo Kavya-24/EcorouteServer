@@ -1,6 +1,7 @@
 const turf = require("@turf/turf");
 const time_coefficient = require("./timeobjective");
 const energy_coefficient = require("./energyobjective");
+const fetch = require("node-fetch");
 const mapboxClient = require("@mapbox/mapbox-sdk");
 const baseClient = mapboxClient({
   accessToken:
