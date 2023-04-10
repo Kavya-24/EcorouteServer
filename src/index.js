@@ -12,7 +12,7 @@ const err = require("./errors");
 const interfaces = require("./interfaces");
 const fetch = require("node-fetch");
 const { directionService } = require("./mapboxServices");
-
+const db  = require("./firebase");
 const app = express();
 
 app.use(helmet());
@@ -388,6 +388,38 @@ app.get("/getPathV2", async (req, res) => {
       const directions = response.body;
       res.send(directions);
     });
+});
+
+const round = (coords) => {
+  return [parseFloat(coords[0].toFixed(5)), parseFloat(coords[1].toFixed(5))];
+}
+app.get("/getHeatmapData", async (req, res) => {
+  dict = {}
+  data = []
+  const snapshot = await db.collection("paths").get();
+  snapshot.forEach( doc => {
+    d = doc.data();
+    ds = d.source; 
+    dd = d.destination;
+    if (round(ds) in dict) {
+      dict[round(ds)] += 1
+    } else {
+      dict[round(ds)] = 1
+    }
+    if (round(dd) in dict) {
+      dict[round(dd)] += 1
+    } else {
+      dict[round(dd)] = 1
+    }
+  })
+  Object.keys(dict).forEach(k => {
+    data.push({
+      coordinates: k.split(','),
+      weight: dict[k]
+    })
+  });
+  console.log(data);
+  res.send(data);
 });
 
 const port = process.env.PORT || 6001;
