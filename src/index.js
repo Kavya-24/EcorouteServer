@@ -12,7 +12,9 @@ const err = require("./errors");
 const interfaces = require("./interfaces");
 const fetch = require("node-fetch");
 const { directionService } = require("./mapboxServices");
-const db  = require("./firebase");
+const db = require("./firebase");
+const { spawn } = require("child_process");
+
 const app = express();
 
 app.use(helmet());
@@ -433,34 +435,61 @@ app.get("/getPathV2", async (req, res) => {
 
 const round = (coords) => {
   return [parseFloat(coords[0].toFixed(5)), parseFloat(coords[1].toFixed(5))];
-}
+};
 app.get("/getHeatmapData", async (req, res) => {
-  dict = {}
-  data = []
+  dict = {};
+  data = [];
   const snapshot = await db.collection("paths").get();
-  snapshot.forEach( doc => {
+  snapshot.forEach((doc) => {
     d = doc.data();
-    ds = d.source; 
+    ds = d.source;
     dd = d.destination;
     if (round(ds) in dict) {
-      dict[round(ds)] += 1
+      dict[round(ds)] += 1;
     } else {
-      dict[round(ds)] = 1
+      dict[round(ds)] = 1;
     }
     if (round(dd) in dict) {
-      dict[round(dd)] += 1
+      dict[round(dd)] += 1;
     } else {
-      dict[round(dd)] = 1
+      dict[round(dd)] = 1;
     }
-  })
-  Object.keys(dict).forEach(k => {
+  });
+  Object.keys(dict).forEach((k) => {
     data.push({
-      coordinates: k.split(','),
-      weight: dict[k]
-    })
+      coordinates: k.split(","),
+      weight: dict[k],
+    });
   });
   console.log(data);
   res.send(data);
+});
+
+app.get("/getOsmnxGraphNodes", (req, res) => {
+  const lat = req.query.lat;
+  const lon = req.query.lon;
+
+  let dataToSend = "no data from python file.";
+
+  const python = spawn("python", ["C:/Users/Aradhya/Desktop/BTP/EcorouteServer/src/osmnx_nodes.py", lat, lon]);
+  
+  python.stdout.on("data", function (data) {
+    console.log("Pipe data from python script ...");
+    dataToSend = data.toString();
+  });
+  
+  python.stderr.on("data", (data) => console.log(data.toString()))
+  
+  python.on("close", (code) => {
+    console.log(`child process close all stdio with code ${code}`);
+    // send data to browser
+    let cords = dataToSend.split('\n');
+    if(cords.length > 1) cords.pop();
+    cords = cords.map(c => c.substring(0, c.length-1))
+    cords = cords.map(c => c.split(' '))
+    cords = cords.map(c => [parseFloat(c[0]), parseFloat(c[1])])
+    res.send(cords);
+  });
 });
 
 const port = process.env.PORT || 6001;
