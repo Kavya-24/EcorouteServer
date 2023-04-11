@@ -436,10 +436,14 @@ app.get("/getPathV2", async (req, res) => {
 const round = (coords) => {
   return [parseFloat(coords[0].toFixed(5)), parseFloat(coords[1].toFixed(5))];
 };
+
 app.get("/getHeatmapData", async (req, res) => {
+  let startdate = req.query.start;
+  let enddate = req.query.end;
+  // console.log(startdate, enddate);
   dict = {};
   data = [];
-  const snapshot = await db.collection("paths").get();
+  const snapshot = await db.collection("paths").where("date", ">=", startdate).where("date", "<=", enddate).get();
   snapshot.forEach((doc) => {
     d = doc.data();
     ds = d.source;
