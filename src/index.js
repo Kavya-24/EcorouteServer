@@ -165,6 +165,10 @@ app.get("/stationsInVicinity", (req, res) => {
  * Wrapper API for getting the desired results for User
  * Inputs:Lat1, Lon1, Lat2,Lon2, SOC
  * By default, SOC = full-charge = 100%
+ * //agra-saharanpur journey
+ * ecoroutePath?lat1=29.96046257019043&lon1=77.54252624511719&lat2=27.1780948638916&lon2=78.02179718017578&soc=64&measure=energy&evcar={"carAge":250,"carBatterCapacity":50,"carChargerType":"Normal","carConnector":["GBT20234Part2","IEC62196Type3","IEC62196Type2CableAttached","IEC62196Type2CCS","IEC60309DCWhite"],"carMileage":50,"carName":"Tesla1"}
+ * http://localhost:6001/ecoroutePath?lat1=28.632980346679688&lon1=77.21929168701172&lat2=28.645992279052734&lon2=77.33332061767578&soc=50&measure=energy&evcar={"carAge":250,"carBatterCapacity":50,"carChargerType":"Normal","carConnector":["GBT20234Part2","IEC62196Type3","IEC62196Type2CableAttached","IEC62196Type2CCS","IEC60309DCWhite"],"carMileage":50,"carName":"Tesla1"}
+ * https://ecoroute-server-ka.onrender.com/ecoroutePath?lat1=28.632980346679688&lon1=77.21929168701172&lat2=28.645992279052734&lon2=77.33332061767578&soc=100&measure=energy&evcar={"carAge":250,"carBatterCapacity":50,"carChargerType":"Normal","carConnector":["GBT20234Part2","IEC62196Type3","IEC62196Type2CableAttached","IEC62196Type2CCS","IEC60309DCWhite"],"carMileage":50,"carName":"Tesla1"}
  * http://localhost:6001/ecoroutePath?lat1=28.632980346679688&lon1=77.21929168701172&lat2=28.464277267456055&lon2=77.50794219970703&soc=63&measure=energy&evcar={%22carAge%22:59,%22carBatterCapacity%22:78,%22carChargerType%22:%22Normal%22,%22carConnector%22:[%22IEC62196Type3%22,%22IEC62196Type2CableAttached%22,%22IEC60309DCWhite%22],%22carMileage%22:484,%22carName%22:%22zban%22}
  */
 app.get("/ecoroutePath", async (req, res) => {
@@ -314,9 +318,10 @@ async function ecorouteIsochone(
     );
 
     if (
-      nextChargingStation.station == null ||
-      nextChargingStation.station === null ||
-      nextChargingStation.station === undefined
+      nextChargingStation === null ||
+      nextChargingStation === null ||
+      nextChargingStation === undefined ||
+      nextChargingStation == undefined
     ) {
       return "ERR: Unable to find appropriate charging stations";
     } else {
@@ -392,6 +397,8 @@ async function findDirectionRoute(path, booked_station_data, measure) {
       lon: path[p][0],
     });
   }
+
+  console.log("\n\n=======request finished=======\n\n")
   return resultantPath;
 }
 
