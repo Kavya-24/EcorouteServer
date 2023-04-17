@@ -349,30 +349,37 @@ async function reserve_station(booked_station_data, measure,){
 
   if(measure === "unoptimzed"){ return;}
 
-  var book_stations = { "stations" : []}
+  var book_stations = { "requests" : []}
 
   for(var i = 0; i<booked_station_data.length; i++){
       if(booked_station_data[i].request_id === null){ return; }
 
-      book_stations["stations"].push({request_id : booked_station_data[i].charger_state.request_id,
+      book_stations["requests"].push({request_id : booked_station_data[i].charger_state.request_id,
                                       station_id : booked_station_data[i].station.id,
-                                      start_time : util.format_date_minutes(booked_station_data[i].charger_state.entry_time, booked_station_data[i].node_state.source_time),
-                                      end_time   : util.format_date_minutes(booked_station_data[i].charger_state.exit_time,booked_station_data[i].node_state.source_time),
                                       port       : booked_station_data[i].charger_state.port})
   }
 
   console.log("\n\n\n")
   console.log(book_stations)
-  return;
-  // const response = await fetch("https://ev-scheduler-zlj6.onrender.com", { 
-  //     method : "POST",
-  //     headers: {
-  //               "Content-Type": "application/json",
-  //             },
-  //     body   : JSON.stringify(book_stations)});
+  
+  const response = await fetch("https://ev-scheduler-zlj6.onrender.com/confirm", { 
+      method : "POST",
+      headers: {
+                "Content-Type": "application/json",
+              },
+      body   : JSON.stringify(book_stations)});
 
-  //   const data = await response.json();
-    
+  try{
+    const data = await response.json();
+    console.log('Reserve-station-confirmation')
+    console.log(data)
+  } catch{
+    console.log('failed-to-reserve-stations')
+  }
+  
+  
+  
+  return  
 }
 async function findDirectionRoute(path, booked_station_data, measure) {
   

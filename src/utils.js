@@ -240,8 +240,7 @@ class Util {
 
     var station_reached_time = node_state.node_time + path_responses[idx]._response.routes[0].duration;
     var soc_change = this.soc_gained(node_state.node_exit_soc,charging_time,evCar);
-    
-    console.log(`\n\n\nformat for node_state station reached at ${station_reached_time} and charged in ${soc_change.time_taken}`)
+    console.log(`\nReached this station at ${station_reached_time} and charged in ${soc_change.time_taken}`)
 
     return {station: path_responses[idx]._station, 
       node_state:   {
@@ -285,7 +284,6 @@ class Util {
     for(var i=0; i< path_responses.length; i++){  
         var station_response = path_responses[i];
         var station_reached_time = node_state.node_time + station_response._response.routes[0].duration;
-        // console.log(`\n\n\nstation-reached at: ${station_reached_time} and ${station_response._station.id}:\n`)
         requestJSON["start_time"].push(this.format_date_minutes(station_reached_time, node_state.source_time));
         requestJSON["end_time"].push(this.format_date_minutes(station_reached_time + charging_time,node_state.source_time));
         requestJSON["cs_queue"].push(station_response._station.id);
@@ -304,7 +302,7 @@ class Util {
     
     console.log(requestJSON)
 
-    const response = await fetch("https://ev-scheduler-zlj6.onrender.com", { 
+    const response = await fetch("https://ev-scheduler-zlj6.onrender.com/check", { 
       method : "POST",
       headers: {
                 "Content-Type": "application/json",
@@ -319,8 +317,8 @@ class Util {
     }
 
     else{
-      var station_id = data.port.slice(0,-3);
-      var station_port = parseInt(data.port.charAt(data.port.length - 1))   
+      var station_id = data.station_id;
+      var station_port = data.port
       console.log(`Found the station ${station_id} with port ${station_port}`);
 
       var idx = 0
