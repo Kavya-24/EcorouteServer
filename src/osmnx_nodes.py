@@ -8,7 +8,7 @@ import sys
 ox.config(use_cache=True, log_console=False)
 
 # download street network data from OSM and construct a MultiGraph model
-G = ox.graph_from_point((float(sys.argv[1]), float(sys.argv[2])), dist=2200, network_type="drive")
+G = ox.graph_from_point((float(sys.argv[1]), float(sys.argv[2])), dist=int(sys.argv[3]), network_type="drive")
 G = ox.distance.add_edge_lengths(G)
 G = ox.utils_graph.get_undirected(G)
 
