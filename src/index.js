@@ -163,12 +163,19 @@ app.get("/stationsInVicinity", (req, res) => {
 
 /**
  * Wrapper API for getting the desired results for User
- * Inputs:Lat1, Lon1, Lat2,Lon2, SOC
- * By default, SOC = full-charge = 100%
- * //agra-saharanpur journey
  * ecoroutePath?lat1=29.96046257019043&lon1=77.54252624511719&lat2=27.1780948638916&lon2=78.02179718017578&soc=64&measure=energy&evcar={"carAge":250,"carBatterCapacity":50,"carChargerType":"Normal","carConnector":["GBT20234Part2","IEC62196Type3","IEC62196Type2CableAttached","IEC62196Type2CCS","IEC60309DCWhite"],"carMileage":50,"carName":"Tesla1"}
  * http://localhost:6001/ecoroutePath?lat1=28.632980346679688&lon1=77.21929168701172&lat2=28.645992279052734&lon2=77.33332061767578&soc=50&measure=energy&evcar={"carAge":250,"carBatterCapacity":50,"carChargerType":"Normal","carConnector":["GBT20234Part2","IEC62196Type3","IEC62196Type2CableAttached","IEC62196Type2CCS","IEC60309DCWhite"],"carMileage":50,"carName":"Tesla1"}
  * https://ecoroute-server-ka.onrender.com/ecoroutePath?lat1=28.632980346679688&lon1=77.21929168701172&lat2=28.645992279052734&lon2=77.33332061767578&soc=100&measure=energy&evcar={"carAge":250,"carBatterCapacity":50,"carChargerType":"Normal","carConnector":["GBT20234Part2","IEC62196Type3","IEC62196Type2CableAttached","IEC62196Type2CCS","IEC60309DCWhite"],"carMileage":50,"carName":"Tesla1"}
+ * 
+ *  
+ * Majestic-Whitefield 
+ * http://localhost:6001/ecoroutePath?lat1=12.9767&lon1=77.5713&lat2=12.9698&lon2=77.7500&soc=10&measure=energy&evcar={%22carAge%22:59,%22carBatterCapacity%22:78,%22carChargerType%22:%22Normal%22,%22carConnector%22:[%22IEC62196Type3%22,%22IEC62196Type2CableAttached%22,%22IEC60309DCWhite%22],%22carMileage%22:484,%22carName%22:%22zban%22}
+ * 
+ * Hyderabad-Telangana
+ * http://localhost:6001/ecoroutePath?lat1=17.3850&lon1=78.4867&lat2=17.43602&lon2=78.51935&soc=10&measure=energy&evcar={%22carAge%22:59,%22carBatterCapacity%22:78,%22carChargerType%22:%22Normal%22,%22carConnector%22:[%22IEC62196Type3%22,%22IEC62196Type2CableAttached%22,%22IEC60309DCWhite%22],%22carMileage%22:484,%22carName%22:%22zban%22}
+ * 
+ * 
+ * Path that gives station
  * http://localhost:6001/ecoroutePath?lat1=28.632980346679688&lon1=77.21929168701172&lat2=28.464277267456055&lon2=77.50794219970703&soc=63&measure=energy&evcar={%22carAge%22:59,%22carBatterCapacity%22:78,%22carChargerType%22:%22Normal%22,%22carConnector%22:[%22IEC62196Type3%22,%22IEC62196Type2CableAttached%22,%22IEC60309DCWhite%22],%22carMileage%22:484,%22carName%22:%22zban%22}
  */
 app.get("/ecoroutePath", async (req, res) => {
@@ -223,13 +230,20 @@ app.get("/ecoroutePath", async (req, res) => {
   var path = [];
   var stops = new Set(); //Stations that are part of the path
   var booked_station_data = []
+  var source_dst = {}
+  source_dst.src = [srcLatitude, srcLongitude]
+  source_dst.dst = [dstLatitude,dstLongitude]
+  source_dst.srcState = node_state
+  source_dst.evCar = evCar
+  
 
   if (measure === "petrol") {
     path.push([srcLongitude, srcLatitude]);
     path.push([dstLongitude, dstLatitude]);
-    var resultantPath = await findDirectionRoute(path);
+    var resultantPath = await findDirectionRoute(path,booked_station_data,measure,source_dst);
     res.send(resultantPath);
   } else {
+
     var resultantPath = await ecorouteIsochone(
       srcLatitude,
       srcLongitude,
@@ -241,7 +255,8 @@ app.get("/ecoroutePath", async (req, res) => {
       booked_station_data,
       path,
       measure,
-      evCar
+      evCar,
+      source_dst
     );
 
     res.send(resultantPath);
@@ -259,7 +274,8 @@ async function ecorouteIsochone(
   booked_station_data,
   path,
   measure,
-  evCar
+  evCar,
+  source_dst
 ) {
 
   path.push([srcLongitude, srcLatitude]);
@@ -267,6 +283,7 @@ async function ecorouteIsochone(
   if (path.length >= 20) {
     return "ERR: Too long path";
   }
+
 
   var URL = interfaces.getIsochroneURL(srcLatitude, srcLongitude, node_state.node_exit_soc);
   console.log(`\nERR: Finding the isochrone for ${URL}`);
@@ -302,7 +319,7 @@ async function ecorouteIsochone(
     console.log(
       `ERR: Destination found in the current isochrone. Number of steps = ${steps}. Path size= ${path.length}`
     );
-    return findDirectionRoute(path, booked_station_data);
+    return findDirectionRoute(path, booked_station_data,measure, source_dst);
   } else if (foundInDestination === false) {
     var nextChargingStation = await util.findAdmissibleChargingStation(
       srcLatitude,
@@ -341,7 +358,8 @@ async function ecorouteIsochone(
         booked_station_data,
         path,
         measure,
-        evCar
+        evCar,
+        source_dst
       );
       return isochrone_child_response;
     }
@@ -350,18 +368,16 @@ async function ecorouteIsochone(
   }
 }
 
-async function reserve_station(booked_station_data, measure,){
+async function reserve_station(booked_station_data, measure){
 
   if(measure === "unoptimzed"){ return;}
+  if(booked_station_data.length < 1){ return; }
 
-  var book_stations = { "requests" : []}
+  var book_stations = { "request_id" : []}
 
   for(var i = 0; i<booked_station_data.length; i++){
       if(booked_station_data[i].request_id === null){ return; }
-
-      book_stations["requests"].push({request_id : booked_station_data[i].charger_state.request_id,
-                                      station_id : booked_station_data[i].station.id,
-                                      port       : booked_station_data[i].charger_state.port})
+      book_stations["request_id"].push(booked_station_data[i].charger_state.request_id)
   }
 
   console.log("\n\n\n")
@@ -386,9 +402,43 @@ async function reserve_station(booked_station_data, measure,){
   
   return  
 }
-async function findDirectionRoute(path, booked_station_data, measure) {
+
+async function log_route(path,booked_station_data, measure, source_dst){
   
-  reserve_station(booked_station_data)
+
+  var route_parameters = {}
+  route_parameters.src = source_dst.src                                     //lat,long format
+  route_parameters.dst = source_dst.dst                                     //lat,long format
+  
+  route_parameters.initial_soc = source_dst.srcState.node_exit_soc          //percentage of initial source state
+  route_parameters.initial_timestamp = source_dst.srcState.node_time        //unix time stamp of start
+
+  route_parameters.path = path
+
+  route_parameters.stations = []                                            //each station has entry
+  for(var i=0; i<booked_station_data.length; i++){
+    var c = booked_station_data[i]
+    route_parameters.stations.push({lat: c.station.position.lat, lon: c.station.position.lon , entry_time: c.node_state.node_time })
+  }
+
+  route_parameters.car = source_dst.evCar                                   //the car that has been used
+
+  console.log("ROUTE-LOG: Route: ")
+  console.log(route_parameters)
+
+  const jsonRoute= JSON.stringify(route_parameters);
+  const fileContent = fs.readFileSync('route_log.json', 'utf-8');
+  const jsonArray = fileContent ? JSON.parse(fileContent) : [];
+  jsonArray.push(JSON.parse(jsonRoute));
+
+  fs.writeFileSync('route_log.json', JSON.stringify(jsonArray), 'utf-8');
+
+  
+}
+async function findDirectionRoute(path, booked_station_data, measure, source_dst) {
+  
+  reserve_station(booked_station_data, measure)
+  log_route(path,booked_station_data, measure, source_dst)
 
   var resultantPath = [];
   for (let p = 0; p < path.length; p++) {

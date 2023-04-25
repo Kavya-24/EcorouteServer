@@ -162,9 +162,9 @@ class Util {
     stationsInQueue.sort(this.sortStations);
     console.log("Stations found: " + stationsInQueue.length);
 
-    for(var i =0; i< stationsInQueue.length; i++){
-      this.printFn(stationsInQueue[i])
-    }
+    // for(var i =0; i< stationsInQueue.length; i++){
+    //   this.printFn(stationsInQueue[i])
+    // }
 
     return stationsInQueue;
   }
