@@ -123,6 +123,8 @@ app.get("/chargingStations", (req, res) => {
   }
 });
 
+
+/**Kavya-Start */
 /**
  * API for getting the stations within a distance d from a point (LatLng)
  * Sample Query: http://localhost:6001/stationsInVicinity?lat=25.5376569&lon=84.8481432&radius=300000
@@ -451,6 +453,8 @@ async function findDirectionRoute(path, booked_station_data, measure, source_dst
   console.log("\n\n=======request finished=======\n\n")
   return resultantPath;
 }
+/**Kavya-End */
+
 
 app.get("/getPathV1", async (req, res) => {
   let srcLong = req.query.srcLong;
@@ -465,6 +469,7 @@ app.get("/getPathV1", async (req, res) => {
 
   res.send(data);
 });
+
 
 /**
  * Returns path between source and destination
@@ -497,36 +502,53 @@ app.get("/getPathV2", async (req, res) => {
     });
 });
 
-const round = (coords) => {
-  return [parseFloat(coords[0].toFixed(5)), parseFloat(coords[1].toFixed(5))];
-};
+
+// const round = (coords) => {
+//   return [parseFloat(coords[0].toFixed(5)), parseFloat(coords[1].toFixed(5))];
+// };
 
 app.get("/getHeatmapData", async (req, res) => {
   let startdate = req.query.start;
   let enddate = req.query.end;
   // console.log(startdate, enddate);
-  dict = {};
+  freqDict = {};
+  timeDict = {};
+  totalFreq = 0;
+  totalTime = 0;
   data = [];
-  const snapshot = await db.collection("paths").where("date", ">=", startdate).where("date", "<=", enddate).get();
+  const snapshot = await db
+    .collection("paths")
+    .where("date", ">=", startdate)
+    .where("date", "<=", enddate)
+    .get();
   snapshot.forEach((doc) => {
     d = doc.data();
     ds = d.source;
     dd = d.destination;
-    if (round(ds) in dict) {
-      dict[round(ds)] += 1;
+    time = d.timeAtDestination;
+    console.log(time);
+    totalFreq += 1;
+    totalTime += time;
+
+    if (ds in freqDict) {
+      freqDict[ds] += 1;
     } else {
-      dict[round(ds)] = 1;
+      freqDict[ds] = 1;
     }
-    if (round(dd) in dict) {
-      dict[round(dd)] += 1;
+    if (!(ds in timeDict)) timeDict[ds] = 0;
+
+    if (dd in freqDict) {
+      freqDict[dd] += 1;
+      timeDict[dd] += time;
     } else {
-      dict[round(dd)] = 1;
+      freqDict[dd] = 1;
+      timeDict[dd] = time;
     }
   });
-  Object.keys(dict).forEach((k) => {
+  Object.keys(freqDict).forEach((k) => {
     data.push({
       coordinates: k.split(","),
-      weight: dict[k],
+      weight: freqDict[k] / totalFreq + (3 * timeDict[k]) / totalTime, // 1*fractionOfPathsHere + 3*fractionTimeSpentHere
     });
   });
   console.log(data);
@@ -536,29 +558,79 @@ app.get("/getHeatmapData", async (req, res) => {
 app.get("/getOsmnxGraphNodes", (req, res) => {
   const lat = req.query.lat;
   const lon = req.query.lon;
+  const dis = req.query.dis;
 
   let dataToSend = "no data from python file.";
 
-  const python = spawn("python", ["C:/Users/Aradhya/Desktop/BTP/EcorouteServer/src/osmnx_nodes.py", lat, lon]);
-  
+  const python = spawn("python", [
+    "C:/Users/Aradhya/Desktop/BTP/EcorouteServer/src/osmnx_nodes.py",
+    lat,
+    lon,
+    dis,
+  ]);
+
   python.stdout.on("data", function (data) {
     console.log("Pipe data from python script ...");
     dataToSend = data.toString();
   });
-  
-  python.stderr.on("data", (data) => console.log(data.toString()))
-  
+
+  python.stderr.on("data", (data) => console.log(data.toString()));
+
   python.on("close", (code) => {
     console.log(`child process close all stdio with code ${code}`);
     // send data to browser
-    let cords = dataToSend.split('\n');
-    if(cords.length > 1) cords.pop();
-    cords = cords.map(c => c.substring(0, c.length-1))
-    cords = cords.map(c => c.split(' '))
-    cords = cords.map(c => [parseFloat(c[0]), parseFloat(c[1])])
+    let cords = dataToSend.split("\n");
+    if (cords.length > 1) cords.pop();
+    cords = cords.map((c) => c.substring(0, c.length - 1));
+    cords = cords.map((c) => c.split(" "));
+    cords = cords.map((c) => [parseFloat(c[0]), parseFloat(c[1])]);
     res.send(cords);
   });
 });
+
+app.get("/getPlacement", (req, res) => {
+  const lat = req.query.lat;
+  const lon = req.query.lon;
+  const dis = req.query.dis;
+  const evrange = req.query.evrange;
+  const num = req.query.num;
+
+  let dataToSend = "no data from python file.";
+
+  const python = spawn("python", [
+    "C:/Users/Aradhya/Desktop/BTP/EcorouteServer/src/placement.py",
+    lat,
+    lon,
+    dis,
+    evrange, 
+    num 
+  ]);
+
+  python.stdout.on("data", function (data) {
+    console.log("Pipe data from python script ...");
+    dataToSend = data.toString();
+  });
+
+  python.stderr.on("data", (data) => console.log(data.toString()));
+
+  python.on("close", (code) => {
+    console.log(`child process close all stdio with code ${code}`);
+    console.log(dataToSend);
+    res.send(dataToSend);
+  });
+});
+
+// app.post("/postPlacementRequest", async (req, res) => {
+//   try {
+//     let {lat, lon, num, dis, evrange} = req.query
+//     const s = await db.collection("placementRequests").add({
+//       lat, long: lon, num, dis, evrange
+//     })
+//     res.send(s)
+//   }catch(e) {
+//     console.log(e);
+//   }
+// })
 
 const port = process.env.PORT || 6001;
 
