@@ -181,6 +181,8 @@ app.get("/stationsInVicinity", (req, res) => {
  * http://localhost:6001/ecoroutePath?lat1=28.632980346679688&lon1=77.21929168701172&lat2=28.464277267456055&lon2=77.50794219970703&soc=63&measure=energy&evcar={%22carAge%22:59,%22carBatterCapacity%22:78,%22carChargerType%22:%22Normal%22,%22carConnector%22:[%22IEC62196Type3%22,%22IEC62196Type2CableAttached%22,%22IEC60309DCWhite%22],%22carMileage%22:484,%22carName%22:%22zban%22}
  */
 app.get("/ecoroutePath", async (req, res) => {
+
+  console.log("\n\n=======request started=======\n\n")
   const srcLatitude = req.query.lat1;
   const srcLongitude = req.query.lon1;
   const dstLatitude = req.query.lat2;
@@ -233,16 +235,21 @@ app.get("/ecoroutePath", async (req, res) => {
   var stops = new Set(); //Stations that are part of the path
   var booked_station_data = []
   var source_dst = {}
+  
   source_dst.src = [srcLatitude, srcLongitude]
   source_dst.dst = [dstLatitude,dstLongitude]
   source_dst.srcState = node_state
   source_dst.evCar = evCar
   
+  //details for latitude, longitude, name, port, timestamp reached, exit soc
+  var app_log = []
+  app_log.push({latitude : srcLatitude, longitude: srcLongitude, name: "source", port: "null", timestamp : current_timestamp, soc : soc})
+
 
   if (measure === "petrol") {
     path.push([srcLongitude, srcLatitude]);
     path.push([dstLongitude, dstLatitude]);
-    var resultantPath = await findDirectionRoute(path,booked_station_data,measure,source_dst);
+    var resultantPath = await findDirectionRoute(path,booked_station_data,measure,source_dst,app_log);
     res.send(resultantPath);
   } else {
 
@@ -258,7 +265,8 @@ app.get("/ecoroutePath", async (req, res) => {
       path,
       measure,
       evCar,
-      source_dst
+      source_dst,
+      app_log
     );
 
     res.send(resultantPath);
@@ -277,10 +285,12 @@ async function ecorouteIsochone(
   path,
   measure,
   evCar,
-  source_dst
+  source_dst,
+  app_log
 ) {
 
   path.push([srcLongitude, srcLatitude]);
+  
 
   if (path.length >= 20) {
     return "ERR: Too long path";
@@ -321,7 +331,8 @@ async function ecorouteIsochone(
     console.log(
       `ERR: Destination found in the current isochrone. Number of steps = ${steps}. Path size= ${path.length}`
     );
-    return findDirectionRoute(path, booked_station_data,measure, source_dst);
+    app_log.push({latitude : dstLatitude, longitude: dstLongitude, name: "destination", port: "null", timestamp : node_state.node_time + 1800, soc : node_state.node_exit_soc * 0.4})
+    return findDirectionRoute(path, booked_station_data,measure, source_dst,app_log);
   } else if (foundInDestination === false) {
     var nextChargingStation = await util.findAdmissibleChargingStation(
       srcLatitude,
@@ -345,9 +356,8 @@ async function ecorouteIsochone(
       return "ERR: Unable to find appropriate charging stations";
     } else {
       stops.add(nextChargingStation.station);
-      
       booked_station_data.push({station : nextChargingStation.station, node_state : nextChargingStation.node_state, charger_state : nextChargingStation.charger_state})
-
+      app_log.push({latitude : nextChargingStation.station.position.lat, longitude: nextChargingStation.station.position.lon, name: nextChargingStation.station.poi.name, port: nextChargingStation.charger_state.port, timestamp : nextChargingStation.charger_state.exit_time, soc : nextChargingStation.charger_state.exit_soc})
 
       const isochrone_child_response = await ecorouteIsochone(
         nextChargingStation.station.position.lat,
@@ -361,7 +371,8 @@ async function ecorouteIsochone(
         path,
         measure,
         evCar,
-        source_dst
+        source_dst,
+        app_log
       );
       return isochrone_child_response;
     }
@@ -437,21 +448,17 @@ async function log_route(path,booked_station_data, measure, source_dst){
 
   
 }
-async function findDirectionRoute(path, booked_station_data, measure, source_dst) {
+async function findDirectionRoute(path, booked_station_data, measure, source_dst,app_log) {
   
   reserve_station(booked_station_data, measure)
-  log_route(path,booked_station_data, measure, source_dst)
-
-  var resultantPath = [];
-  for (let p = 0; p < path.length; p++) {
-    resultantPath.push({
-      lat: path[p][1],
-      lon: path[p][0],
-    });
-  }
-
+  // log_route(path,booked_station_data, measure, source_dst)
+  
+  console.log("Application Log: \n\n\n")
+  console.log(app_log)
+  
   console.log("\n\n=======request finished=======\n\n")
-  return resultantPath;
+  
+  return app_log;
 }
 /**Kavya-End */
 

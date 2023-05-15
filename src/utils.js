@@ -1,6 +1,4 @@
 const turf = require("@turf/turf");
-const time_coefficient = require("./timeobjective");
-const energy_coefficient = require("./energyobjective");
 const fetch = require("node-fetch");
 const mapboxClient = require("@mapbox/mapbox-sdk");
 const baseClient = mapboxClient({
@@ -323,7 +321,7 @@ class Util {
     else{
       var station_id = data.station_id;
       var station_port = data.port
-      console.log(`Found the station ${station_id} with port ${station_port}`);
+      console.log(`Selecting the station ${station_id} with port ${station_port}`);
 
       var idx = 0
 
