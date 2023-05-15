@@ -243,7 +243,7 @@ app.get("/ecoroutePath", async (req, res) => {
   
   //details for latitude, longitude, name, port, timestamp reached, exit soc
   var app_log = []
-  app_log.push({latitude : srcLatitude, longitude: srcLongitude, name: "source", port: "null", timestamp : current_timestamp, soc : soc})
+  app_log.push({latitude : srcLatitude.toString(), longitude: srcLongitude.toString(), name: "source", port: "null", timestamp : current_timestamp.toString(), soc : soc.toString()})
 
 
   if (measure === "petrol") {
@@ -331,7 +331,7 @@ async function ecorouteIsochone(
     console.log(
       `ERR: Destination found in the current isochrone. Number of steps = ${steps}. Path size= ${path.length}`
     );
-    app_log.push({latitude : dstLatitude, longitude: dstLongitude, name: "destination", port: "null", timestamp : node_state.node_time + 1800, soc : node_state.node_exit_soc * 0.4})
+    app_log.push({latitude : dstLatitude.toString(), longitude: dstLongitude.toString(), name: "destination", port: "null", timestamp : (node_state.node_time + 1800).toString(), soc : (node_state.node_exit_soc * 0.4).toString()})
     return findDirectionRoute(path, booked_station_data,measure, source_dst,app_log);
   } else if (foundInDestination === false) {
     var nextChargingStation = await util.findAdmissibleChargingStation(
@@ -357,7 +357,7 @@ async function ecorouteIsochone(
     } else {
       stops.add(nextChargingStation.station);
       booked_station_data.push({station : nextChargingStation.station, node_state : nextChargingStation.node_state, charger_state : nextChargingStation.charger_state})
-      app_log.push({latitude : nextChargingStation.station.position.lat, longitude: nextChargingStation.station.position.lon, name: nextChargingStation.station.poi.name, port: nextChargingStation.charger_state.port, timestamp : nextChargingStation.charger_state.exit_time, soc : nextChargingStation.charger_state.exit_soc})
+      app_log.push({latitude : nextChargingStation.station.position.lat.toString(), longitude: nextChargingStation.station.position.lon.toString(), name: nextChargingStation.station.poi.name.toString(), port: nextChargingStation.charger_state.port.toString(), timestamp : nextChargingStation.charger_state.exit_time.toString(), soc : nextChargingStation.charger_state.exit_soc.toString()})
 
       const isochrone_child_response = await ecorouteIsochone(
         nextChargingStation.station.position.lat,
